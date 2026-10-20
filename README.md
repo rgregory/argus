@@ -68,31 +68,104 @@ macOS keeps its unified log in a binary format that only Apple's own `log` tool 
 
 The collector is installed at `/usr/local/libexec/argus/` and owned by root. That's on purpose: a LaunchDaemon running as root should never execute a script your own account can edit.
 
-## Prerequisites
-
-- A Mac with [Apple's `container` CLI](https://github.com/apple/container) installed and working (`container --version` should print a version).
-- Admin rights, because the host collector installs a root LaunchDaemon.
-
-That's all you need to get started. Pi-hole, IntelOwl, CrowdSec enrollment and the OSINT keys are optional, and each stays off until you configure it.
-
 ## Setup
 
+### What you need
+
+- A Mac with Apple silicon running macOS 26. Apple's `container` runtime doesn't support Intel Macs or older versions of macOS.
+- Apple's `container` CLI. Install the signed package from its [releases page](https://github.com/apple/container/releases), then run `container system start` once. `container system status` should report that it's running.
+- An admin account. Installing the host collector uses `sudo`.
+
+That's all. Pi-hole, IntelOwl, CrowdSec enrollment and the OSINT API keys are optional, and each stays off until you configure it.
+
+### 1. Get the code
+
 ```bash
-git clone https://github.com/rgregory/argus.git && cd argus
-./argus.sh init                 # creates $ARGUS_HOME (default ~/.argus), config, CrowdSec bouncer key
-# edit $ARGUS_HOME/config/argus.env (Pi-hole app password, IntelOwl token, optional keys; see argus.env.example)
-./argus.sh build                # builds argus:latest (CrowdSec Alpine image + Node 24 + syslog-ng)
-./argus.sh install-collector    # sudo: LaunchDaemon + your LaunchAgent, root-owned inbox
-./argus.sh up                   # starts the container and prints the dashboard URL
+git clone https://github.com/rgregory/argus.git
+cd argus
 ```
 
-Then open <http://127.0.0.1:7080>. Everything after this point is optional, and Argus runs fine with none of it set.
+### 2. Create your config
 
-`$ARGUS_HOME` defaults to `~/.argus` and holds your config and reports. You can point it somewhere else. `init` sets the config file to `chmod 600` because it holds your API keys and passwords.
+```bash
+./argus.sh init
+```
 
-If you do move `ARGUS_HOME`, keep the path lowercase. The default Mac file system is case-insensitive, so a path like `~/Stuff/Argus` can quietly land in the same folder as another one, and you end up editing an `argus.env` that isn't the one being read. The default path is already lowercase, but nothing checks a custom one for you.
+This creates `~/.argus`, copies `argus.env.example` to `~/.argus/config/argus.env` (readable only by you), sets up `~/.argus/data` for reports and exports, and generates the key Argus uses to read CrowdSec's local API. It's safe to run again: an existing config is left alone.
 
-The paths in the rest of this README (`$ARGUS_HOME`, `/Users/Shared/Argus/inbox` and so on) are just the defaults from `argus.env.example`. Each one is a setting, so change whatever doesn't fit your layout in `argus.env`.
+You don't have to edit `argus.env` before the first start. Argus runs with every optional setting blank, and you can add Pi-hole, IntelOwl or API keys later (see [Optional setup](#optional-setup)).
+
+### 3. Build the image
+
+```bash
+./argus.sh build
+```
+
+This builds `argus:latest` from the official CrowdSec Alpine image plus Node 24 and syslog-ng. The first build downloads both base images, so give it a few minutes. If the builder VM can't resolve host names, which happens a lot when your Mac uses a local Pi-hole for DNS, the script resets the builder with public DNS servers and tries again on its own.
+
+### 4. Install the host collector
+
+```bash
+./argus.sh install-collector
+```
+
+It asks for your password, then:
+
+- copies `argus-collect.sh` to `/usr/local/libexec/argus/`, owned by root
+- creates the inbox at `/Users/Shared/Argus/inbox`
+- loads a LaunchDaemon (`com.argus.collect`) that runs as root every 5 minutes and exports the security slice of the unified log
+- loads a LaunchAgent (`com.argus.collect.user`) that runs as you every 15 minutes and picks up container logs, launchd jobs and Ollama
+
+The first batch lands in the inbox within a minute. If something looks wrong, check `/var/log/argus-collect.log`.
+
+### 5. Start Argus
+
+```bash
+./argus.sh up
+```
+
+This starts the container, waits until the dashboard answers, and prints its address. Open <http://127.0.0.1:7080>, or run `./argus.sh open`.
+
+The CrowdSec tab can show `connection refused` for the first minute while CrowdSec finishes its own startup. That's normal and clears by itself.
+
+### 6. Check that it's working
+
+```bash
+./argus.sh status
+```
+
+You should see the `argus` container running, followed by `dashboard answering`, `collector daemon installed` and `collector agent installed`. macOS findings start appearing in the dashboard once the first collector batch has been read, usually within five minutes.
+
+### Changing settings
+
+Edit `~/.argus/config/argus.env`, then run `./argus.sh restart`. Restarting replaces the container, but indicators, CrowdSec state and the feed cache live in volumes and carry over.
+
+`$ARGUS_HOME` defaults to `~/.argus`. To use a different folder, set `ARGUS_HOME` in your shell before running `argus.sh`, and keep the path lowercase. The default Mac file system is case-insensitive, so a path like `~/Stuff/Argus` can quietly land in the same folder as another one, and you end up editing an `argus.env` that isn't the one being read. The default path is already lowercase, but nothing checks a custom one for you.
+
+### Where things live
+
+| What | Where |
+|---|---|
+| Your settings | `~/.argus/config/argus.env` |
+| Reports and CSV exports | `~/.argus/data/` |
+| Collector inbox | `/Users/Shared/Argus/inbox` |
+| Collector script | `/usr/local/libexec/argus/argus-collect.sh` |
+| Collector logs | `/var/log/argus-collect.log` and `~/Library/Logs/argus-collect-user.log` |
+| Argus and CrowdSec state | container volumes `argus-state`, `argus-cs-config`, `argus-cs-data` |
+
+Two of these are settings: move the inbox with `ARGUS_INBOX` in `argus.env`, and `~/.argus` with `ARGUS_HOME` as described above. The collector script and log paths are fixed.
+
+### Uninstalling
+
+```bash
+./argus.sh stream off            # only if you turned on live streaming
+./argus.sh uninstall-collector   # removes the LaunchDaemon, LaunchAgent and collector script
+./argus.sh destroy               # removes the container and its volumes (asks you to type "destroy")
+```
+
+None of these touch your config, your reports or the inbox. Delete `~/.argus` and `/Users/Shared/Argus` yourself if you want those gone too.
+
+## Optional setup
 
 ### Pi-hole
 
@@ -121,7 +194,7 @@ This turns on two feeds:
 
 `stream on` also sets `ARGUS_MACOS_TO_CROWDSEC=0` and restarts Argus so CrowdSec doesn't count the same event twice. The five-minute collector keeps running and still feeds the dashboard's macOS views. `stream off` puts everything back the way it was.
 
-### Day to day
+## Everyday commands
 
 ```bash
 ./argus.sh status | logs | shell | open
