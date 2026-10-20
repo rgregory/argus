@@ -6,25 +6,46 @@ It only detects. No bouncer is installed and nothing is blocked on the Mac.
 
 ## How it fits together
 
-```
-macOS host                                          argus container (one VM)
-──────────                                          ─────────────────────────────────────────────
-LaunchDaemon (root, every 5 min)                    /host/inbox  (read-only)
-  log show: security slice of the unified log ─┐      │
-  connections, posture, persistence, crashes   ├─►  Argus service (Node, :7080)
-LaunchAgent (you, every 15 min)                │      ├─ macOS analyzer: findings, posture, timeline
-  Apple container logs, launchd jobs, Ollama ──┘      ├─ writes events as syslog lines ─► CrowdSec
-       │                                              ├─ indicators (IPs, domains)
-       ▼                                              │    ├─ threat feeds (HaGeZi, FireHOL, IPsum, abuse.ch…)
-/Users/Shared/Argus/inbox  (root-owned)               │    ├─ CrowdSec decisions + community blocklist
-                                                      │    ├─ OSINT: RDAP age, Shodan InternetDB, CTI, VT…
-/private/var/log, /Library/Logs, ~/Library/Logs ─►    │    └─ IntelOwl playbook for anything flagged
-  (read-only)                                         └─ reports ─► $ARGUS_HOME/data  (the only writable host folder)
-routers / NAS / other hosts
-  syslog  udp 5514 · tcp 5515 ───────────────────►  syslog-ng ─► remote/<host>.log ─► CrowdSec
-                                                              └► remote.tsv ─► Argus
-Pi-hole v6 API  ◄── query log polled every 2 min
-IntelOwl API    ◄── flagged indicators + manual lookups
+```mermaid
+flowchart TB
+  subgraph HOST["macOS host"]
+    LD["<b>LaunchDaemon</b><br/>root · every 5 min<br/>unified-log security slice"]
+    LA["<b>LaunchAgent</b><br/>you · every 15 min<br/>containers, launchd, Ollama"]
+    INBOX[("/Users/Shared/Argus/inbox<br/>root-owned")]
+    LOGS[("/var/log · /Library/Logs<br/>~/Library/Logs")]
+    LD --> INBOX
+    LA --> INBOX
+  end
+
+  subgraph NET["Your network"]
+    REMOTE["Routers · NAS<br/>other hosts"]
+    PIHOLE["Pi-hole v6 API"]
+  end
+
+  subgraph ARGUS["argus container · one VM"]
+    SYSLOG["<b>syslog-ng</b><br/>UDP 5514 · TCP 5515"]
+    SVC["<b>Argus service</b> · :7080<br/>findings · posture · timeline"]
+    CS["<b>CrowdSec</b><br/>detect only · no bouncer"]
+    ENRICH["<b>Enrichment</b> · IPs, domains<br/>threat feeds · CrowdSec list<br/>RDAP · Shodan · CTI · VT"]
+  end
+
+  DATA[("$ARGUS_HOME/data<br/>only writable folder")]
+  INTELOWL["IntelOwl API"]
+
+  INBOX -- "read-only" --> SVC
+  LOGS -- "read-only" --> SVC
+  PIHOLE -- "query log · 2 min" --> SVC
+  REMOTE -- "syslog" --> SYSLOG
+  SYSLOG -- "remote.tsv" --> SVC
+  SYSLOG -- "per-host logs" --> CS
+  SVC -- "events" --> CS
+  SVC --> ENRICH
+  ENRICH <-- "flagged" --> INTELOWL
+  SVC -- "reports" --> DATA
+
+  style HOST fill:transparent,stroke:#8b949e,stroke-dasharray:4 3
+  style NET fill:transparent,stroke:#8b949e,stroke-dasharray:4 3
+  style ARGUS fill:transparent,stroke:#2f81f7,stroke-width:2px
 ```
 
 ### Why there is a host collector
