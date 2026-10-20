@@ -11,3 +11,4 @@ app/test/
 .DS_Store
 *.log
 *.zip
+*.swp
