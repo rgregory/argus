@@ -21,11 +21,11 @@ installed, so its decisions never reach the Mac's actual network stack.
 
 | Access | Scope |
 |---|---|
-| Read-only | the collector's root-owned inbox, `/private/var/log`, `/Library/Logs`, `~/Library/Logs` (the last three only if `ARGUS_MOUNT_HOST_LOGS=1`) |
+| Read-only | the collector's inbox (a root-owned folder only root and your account can open), `/private/var/log`, `/Library/Logs`, `~/Library/Logs` (the last three only if `ARGUS_MOUNT_HOST_LOGS=1`) |
 | Read-write on the host | `$ARGUS_HOME/data` only — reports, CSV exports, and optionally `$ARGUS_HOME/data/config/feeds.json` |
 | Container-internal storage | named volumes `argus-state`, `argus-cs-config`, `argus-cs-data` — live inside the Apple `container` VM, not on your Mac's file system directly |
 | Root file system | read-only by default (`ARGUS_READONLY_ROOT=1`); `/tmp`, `/run`, `/var/log` are tmpfs |
-| Inbound network | the dashboard (`127.0.0.1:7080` by default) and the syslog listener (`127.0.0.1` unless you deliberately bind it to a LAN address) |
+| Inbound network | the dashboard (`127.0.0.1:7080` by default, access token required) and the syslog listener (`127.0.0.1` unless you deliberately bind it to a LAN address) |
 | Dropped capabilities | `NET_RAW`, `MKNOD`, `SYS_CHROOT`, `AUDIT_WRITE`, `SETFCAP` |
 
 **The host collector runs as root.** It's installed once, root-owned, at
@@ -67,7 +67,7 @@ looked up:
 |---|---|---|
 | Shodan InternetDB | public IP | no |
 | rdap.org | domain | no |
-| crt.sh | domain | no |
+| crt.sh | domain (manual lookups only) | no |
 | CrowdSec CTI | IP/domain | `CROWDSEC_CTI_KEY` |
 | AbuseIPDB | IP | `ABUSEIPDB_KEY` |
 | GreyNoise Community | IP | `GREYNOISE_KEY` |
@@ -81,18 +81,19 @@ Daily caps (`CROWDSEC_CTI_DAILY`, `INTELOWL_DAILY_LIMIT`, `ARGUS_RDAP_DAILY`)
 bound how much you can send even with a key configured, both to protect free
 tiers and to limit how much indicator data reasonably leaves the Mac per day.
 
-If you want Argus fully offline, set every `*_KEY`/`*_TOKEN` blank, set
-`DISABLE_ONLINE_API=true`, and leave `ARGUS_FEEDS_DISABLE` listing feeds you
-don't want fetched (or point `ARGUS_DNS` at a resolver that can't reach the
-feed hosts). You lose enrichment and feed updates; the macOS log analysis,
-CrowdSec's already-installed scenarios, and Pi-hole/syslog ingestion keep
-working.
+To cut outbound traffic as far as current settings allow, set every
+`*_KEY`/`*_TOKEN` blank, set `DISABLE_ONLINE_API=true`, `ARGUS_RDAP_DAILY=0`
+and `INTELOWL_AUTO=0`, and list the feeds you don't want fetched in
+`ARGUS_FEEDS_DISABLE`. Shodan InternetDB lookups for public IPs currently have
+no off switch, so Argus is not fully offline even then. The macOS log
+analysis, CrowdSec's already-installed scenarios, and Pi-hole/syslog
+ingestion keep working without any of the above.
 
 ## Secrets
 
 Everything sensitive lives in one file: `$ARGUS_HOME/config/argus.env`,
 created by `./argus.sh init` and `chmod 600` (owner read/write only). It
-holds the CrowdSec bouncer key, Pi-hole app password, IntelOwl token, and any
+holds the CrowdSec bouncer key, the dashboard access token, Pi-hole app password, IntelOwl token, and any
 OSINT API keys you add. **Never commit this file.** `argus.env.example` in
 this repo is a template with every value blank — copy it, don't fill in the
 example and commit that.
@@ -145,7 +146,9 @@ request that demonstrates it live.
 - **Syslog bound to a LAN address** accepts RFC 3164 messages from anything
   that can reach that port, unauthenticated — syslog has no built-in auth.
   Only bind `ARGUS_SYSLOG_BIND` to your LAN IP on a network you trust.
-- **This has not been run against a real Apple `container` VM** by the
-  people who wrote it (see the main README's Known Limits) — review
-  `image/Dockerfile`, `argus.sh`, and the capability/mount list above
-  yourself before trusting it with anything sensitive.
+- **Dashboard access.** Everything except `/api/health` needs `ARGUS_TOKEN`,
+  which `argus.sh init` generates, and the server only answers to localhost
+  Host names, which blocks DNS rebinding. POST requests from another origin
+  are refused. Anyone holding the token can read everything Argus knows, so
+  treat it like a password. If `ARGUS_TOKEN` is blank, anything on the Mac can
+  read the dashboard. See "Security hardening" in the README.

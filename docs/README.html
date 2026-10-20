@@ -30,7 +30,7 @@
 <li>Syslog from your routers, NAS boxes and other hosts in the same place, run through CrowdSec's detection scenarios.</li>
 <li>JSON and CSV reports every five minutes, ready to grep, diff or feed into something else.</li>
 </ul>
-<p>Your logs stay on the Mac. Only the individual IPs and domains being looked up go out, to the providers you've turned on, plus a few keyless lookups (Shodan InternetDB, rdap.org, crt.sh) that are on by default. <a href="../SECURITY.md">SECURITY.md</a> lists every one and how to turn them off.</p>
+<p>Your logs stay on the Mac. Only the individual IPs and domains being looked up go out, to the providers you've turned on, plus two keyless lookups that are on by default (Shodan InternetDB for IPs, rdap.org for domain age). <a href="../SECURITY.md">SECURITY.md</a> lists every provider, and <a href="#security-hardening">Security hardening</a> covers how to cut them back.</p>
 <h2 id="how-it-fits-together">How it fits together</h2>
 <pre class="mermaid">
 flowchart TB
@@ -73,8 +73,6 @@ flowchart TB
   style NET fill:transparent,stroke:#8b949e,stroke-dasharray:4 3
   style ARGUS fill:transparent,stroke:#2f81f7,stroke-width:2px
 </pre>
-<h3 id="why-theres-a-host-collector">Why there's a host collector</h3>
-<p>macOS keeps its unified log in a binary format that only Apple's own <code>log</code> tool can read, so a Linux container can't open it directly. Instead, a small root job on the Mac runs <code>log show</code> every five minutes over back-to-back <code>--start</code>/<code>--end</code> windows and drops a filtered slice into an inbox. Nothing gets missed or counted twice between runs. Everything else (crash reports, <code>/var/log</code>, <code>~/Library/Logs</code>) is mounted into the container read-only.</p>
 <h2 id="what-the-container-can-and-cant-touch">What the container can and can't touch</h2>
 <table class="table table-sm">
 <thead>
@@ -102,7 +100,7 @@ flowchart TB
 </tr>
 <tr>
 <td>Network in</td>
-<td>dashboard on <code>127.0.0.1:7080</code>; syslog on <code>127.0.0.1</code> unless you pick a LAN address</td>
+<td>dashboard on <code>127.0.0.1:7080</code>, token required; syslog on <code>127.0.0.1</code> unless you pick a LAN address</td>
 </tr>
 <tr>
 <td>Capabilities</td>
@@ -110,7 +108,103 @@ flowchart TB
 </tr>
 </tbody>
 </table>
-<p>The collector is installed at <code>/usr/local/libexec/argus/</code> and owned by root. That's on purpose: a LaunchDaemon running as root should never execute a script your own account can edit.</p>
+<h2 id="the-host-collector">The host collector</h2>
+<h3 id="why-it-exists">Why it exists</h3>
+<p>macOS keeps its unified log in a binary format that only Apple's own <code>log</code> tool can read, so a Linux container can't open it. Some of the other things worth checking, like SIP and FileVault status, login history, or crash reports only root can read, also need a command run on the Mac itself. So Argus installs two small scheduled jobs on the Mac that gather this and drop it into an inbox folder, and the container reads that folder read-only.</p>
+<p>Both jobs run the same bash script, <a href="../collector/argus-collect.sh"><code>collector/argus-collect.sh</code></a>. It's under 200 lines, and it's worth reading before you install it.</p>
+<h3 id="why-root">Why root</h3>
+<p>Most of the collector would work fine as your own user. This is what root adds, and what it costs:</p>
+<table class="table table-sm">
+<thead>
+<tr>
+<th>Root is used for</th>
+<th>Reward</th>
+<th>Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lsof</code> across every process</td>
+<td>Shows listening ports and connections from root daemons and other accounts, which are the ones most worth seeing</td>
+<td>Every process's network activity ends up in a file your account can read</td>
+</tr>
+<tr>
+<td><code>sfltool dumpbtm</code></td>
+<td>The full list of login and background items, a common place for malware to persist</td>
+<td>Item names, paths and developer details for every user become readable by your account</td>
+</tr>
+<tr>
+<td>Crash reports only root can read</td>
+<td>Crashes in system daemons, which can point to exploit attempts or a misbehaving extension</td>
+<td>Reports can include usernames, file paths and process details, and become readable by your account</td>
+</tr>
+<tr>
+<td><code>profiles list</code> for the whole Mac</td>
+<td>Shows configuration and MDM profiles installed device-wide, not just yours</td>
+<td>Low: profile names and identifiers only</td>
+</tr>
+<tr>
+<td>Running as a LaunchDaemon</td>
+<td>Keeps collecting at the login window, straight after a reboot, and while you're logged out</td>
+<td>A root process runs every 5 minutes whether you're there or not</td>
+</tr>
+<tr>
+<td>The script itself running as root</td>
+<td>One short script covers all of the above</td>
+<td>Anyone who could replace the script would get root every 5 minutes. It's <code>root:wheel 0755</code>, so replacing it already takes root</td>
+</tr>
+</tbody>
+</table>
+<p>Most of the risk column comes down to one thing: root gathers information that your account normally can't see, and puts it where your account can. The inbox folder is locked to root and the account that installed the collector, so other users on the Mac can't open it. What's left is that any program running as you can read it too. If something malicious is already running as you, that hands it a convenient map of the system.</p>
+<p>One risk doesn't depend on root at all. <code>sudo</code> logs full command lines, so a password or token typed as a command argument ends up in the log slice, and from there in the inbox.</p>
+<h3 id="the-root-job">The root job</h3>
+<p><code>com.argus.collect</code> is a LaunchDaemon that runs as root every 5 minutes (and once at boot) at low CPU and disk priority. This is everything it does.</p>
+<p>On every run:</p>
+<ul>
+<li>Runs <code>log show</code> with a fixed filter over the time since its last run, so nothing is missed or read twice. The filter matches <code>sudo</code>, <code>authd</code>, <code>SecurityAgent</code>, <code>sshd</code>, Screen Sharing, screen lock and unlock, Gatekeeper (<code>syspolicyd</code>), XProtect, the application firewall, TCC permission events, background task management and Little Snitch, plus every fault-level message. After sleep or a reboot it catches up at most 60 minutes (<code>ARGUS_MAX_BACKLOG_MIN</code>).</li>
+<li>Lists established TCP connections with <code>lsof</code>.</li>
+</ul>
+<p>Once an hour:</p>
+<ul>
+<li>Records security posture with read-only status commands: <code>csrutil status</code>, <code>spctl --status</code>, <code>fdesetup status</code>, the firewall's <code>--getglobalstate</code>, <code>--getstealthmode</code> and <code>--getblockall</code>, Remote Login, <code>sw_vers</code>, and the Software Update preferences.</li>
+<li>Lists <code>/Library/LaunchAgents</code>, <code>/Library/LaunchDaemons</code> and every user's <code>~/Library/LaunchAgents</code>, and prints each plist with <code>plutil -p</code>.</li>
+<li>Saves the output of <code>sfltool dumpbtm</code> (login and background items), <code>systemextensionsctl list</code>, <code>profiles list</code>, <code>last</code> (login history), <code>pmset -g log</code> (sleep and wake lines only), <code>softwareupdate --history</code>, the tail of <code>/var/log/install.log</code>, and the listening TCP and UDP ports from <code>lsof</code>.</li>
+<li>Copies crash, panic, hang and spin reports from the last 14 days out of <code>/Library/Logs/DiagnosticReports</code>.</li>
+</ul>
+<p>Housekeeping:</p>
+<ul>
+<li>Deletes its own files from the inbox: log slices older than 3 days (<code>ARGUS_INBOX_DAYS</code>), copied crash reports older than 14 days, and leftover temp files.</li>
+<li>Writes <code>meta.json</code> with the hostname, macOS version, time zone and time of the last run.</li>
+</ul>
+<h3 id="what-the-root-job-doesnt-do">What the root job doesn't do</h3>
+<ul>
+<li>It never touches the network. The script makes no network calls of any kind.</li>
+<li>It doesn't change any system setting. Every command it runs only reads or reports status.</li>
+<li>It only writes inside the inbox (<code>/Users/Shared/Argus/inbox</code> by default), and it only deletes its own old files there. The one setting it changes is the inbox folder's own permissions, which it keeps locked to root and you.</li>
+<li>It never runs anything from the inbox or from the container. The container mounts the inbox read-only, so nothing in the container can feed instructions back to the root job.</li>
+<li>It doesn't read the whole unified log, only the filtered slice above. (<code>argus.sh stream on</code> is a separate, optional job, described under <a href="#optional-setup">Optional setup</a>.)</li>
+<li>It doesn't read your documents or anything else in your home folder, apart from listing and printing the plists in each user's <code>~/Library/LaunchAgents</code>.</li>
+<li>It doesn't open the TCC database. Permission changes come from TCC's own log messages.</li>
+</ul>
+<p>The script is installed at <code>/usr/local/libexec/argus/argus-collect.sh</code> as <code>root:wheel</code>, mode <code>0755</code>, so your own account can't edit what root runs. The LaunchDaemon plist is root-owned too.</p>
+<p>The inbox folder itself is owned by root with mode <code>0700</code>, plus one access control entry that lets the account that installed the collector list and enter it. That's the account the container reads through, so Argus keeps working, while other accounts on the Mac are stopped at the folder and can't read anything inside. The root job re-applies this lock on every run, so if something loosens it, it's back within five minutes. The job's own bookkeeping folder (<code>.state</code>) is root-only.</p>
+<h3 id="the-user-job">The user job</h3>
+<p><code>com.argus.collect.user</code> is a LaunchAgent that runs as you every 15 minutes. It refuses to run as root. It saves:</p>
+<ul>
+<li><code>launchctl list</code> and <code>crontab -l</code> for your account</li>
+<li>the last 5,000 lines of logs from every Apple container on the Mac, plus the last 15 minutes of the container runtime's own log</li>
+<li>the tail of Ollama's server log, if you have one at <code>~/.ollama/logs/server.log</code></li>
+<li>Pi-hole's query log from inside its container, but only if you set <code>ARGUS_PIHOLE_QUERYLOG=1</code> (off by default; the Pi-hole API is the normal route)</li>
+</ul>
+<p>Container logs can contain whatever those containers print, so if one of your other containers logs secrets, Argus will see them too.</p>
+<h3 id="checking-on-it">Checking on it</h3>
+<pre><code class="language-bash">sudo launchctl print system/com.argus.collect | grep -E 'state|last exit'   # the root job
+tail -n 20 /var/log/argus-collect.log                                       # what it did on each run
+ls -led /Users/Shared/Argus/inbox                                           # the lock: drwx------ root wheel, plus 0: user:&lt;you&gt; allow list,search,...
+sudo -u nobody ls /Users/Shared/Argus/inbox                                 # another account: should say Permission denied
+ls -la /Users/Shared/Argus/inbox                                            # what it wrote
+./argus.sh uninstall-collector                                              # remove both jobs and the script
+</code></pre>
 <h2 id="setup">Setup</h2>
 <h3 id="what-you-need">What you need</h3>
 <ul>
@@ -126,8 +220,10 @@ cd argus
 <h3 id="2-create-your-config">2. Create your config</h3>
 <pre><code class="language-bash">./argus.sh init
 </code></pre>
-<p>This creates <code>~/.argus</code>, copies <code>argus.env.example</code> to <code>~/.argus/config/argus.env</code> (readable only by you), sets up <code>~/.argus/data</code> for reports and exports, and generates the key Argus uses to read CrowdSec's local API. It's safe to run again: an existing config is left alone.</p>
-<p>You don't have to edit <code>argus.env</code> before the first start. Argus runs with every optional setting blank, and you can add Pi-hole, IntelOwl or API keys later (see <a href="#optional-setup">Optional setup</a>).</p>
+<p>This creates <code>~/.argus</code>, copies <code>argus.env.example</code> to <code>~/.argus/config/argus.env</code> (readable only by you), and sets up <code>~/.argus/data</code> for reports and exports. It generates two keys for you: one Argus uses to read CrowdSec's local API, and an access token for the dashboard.</p>
+<p>Then it asks for each credential in turn: the Pi-hole app password, IntelOwl's address and API token, a CrowdSec console enroll key, and the free threat-intel API keys (abuse.ch, CrowdSec CTI, AbuseIPDB, VirusTotal, OTX, GreyNoise). Each question says where to get the key. Every one is optional, so press Enter to skip it. Secrets aren't shown as you type.</p>
+<p>Run <code>./argus.sh init</code> again any time to add or change credentials. Values you've already set show as <code>[set]</code>, Enter keeps them, and <code>-</code> clears one. <code>./argus.sh init --no-prompt</code> sets up the folders and keys without asking anything.</p>
+<p>It's fine to skip every question on the first run. Argus works with all credentials blank, and <a href="#optional-setup">Optional setup</a> explains what each integration adds.</p>
 <h3 id="3-build-the-image">3. Build the image</h3>
 <pre><code class="language-bash">./argus.sh build
 </code></pre>
@@ -142,18 +238,19 @@ cd argus
 <li>loads a LaunchDaemon (<code>com.argus.collect</code>) that runs as root every 5 minutes and exports the security slice of the unified log</li>
 <li>loads a LaunchAgent (<code>com.argus.collect.user</code>) that runs as you every 15 minutes and picks up container logs, launchd jobs and Ollama</li>
 </ul>
-<p>The first batch lands in the inbox within a minute. If something looks wrong, check <code>/var/log/argus-collect.log</code>.</p>
+<p>The first batch lands in the inbox within a minute. If something looks wrong, check <code>/var/log/argus-collect.log</code>. <a href="#the-host-collector">The host collector</a> lists everything both jobs do.</p>
 <h3 id="5-start-argus">5. Start Argus</h3>
 <pre><code class="language-bash">./argus.sh up
 </code></pre>
-<p>This starts the container, waits until the dashboard answers, and prints its address. Open <a href="http://127.0.0.1:7080">http://127.0.0.1:7080</a>, or run <code>./argus.sh open</code>.</p>
+<p>This starts the container, waits until the dashboard answers, and prints its address. Then run <code>./argus.sh open</code>. It opens the dashboard and signs your browser in with the access token, which lasts 90 days in that browser. Going straight to <a href="http://127.0.0.1:7080">http://127.0.0.1:7080</a> without signing in shows a page asking for the token.</p>
 <p>The CrowdSec tab can show <code>connection refused</code> for the first minute while CrowdSec finishes its own startup. That's normal and clears by itself.</p>
 <h3 id="6-check-that-its-working">6. Check that it's working</h3>
 <pre><code class="language-bash">./argus.sh status
 </code></pre>
 <p>You should see the <code>argus</code> container running, followed by <code>dashboard answering</code>, <code>collector daemon installed</code> and <code>collector agent installed</code>. macOS findings start appearing in the dashboard once the first collector batch has been read, usually within five minutes.</p>
 <h3 id="changing-settings">Changing settings</h3>
-<p>Edit <code>~/.argus/config/argus.env</code>, then run <code>./argus.sh restart</code>. Restarting replaces the container, but indicators, CrowdSec state and the feed cache live in volumes and carry over.</p>
+<p>Change credentials with <code>./argus.sh init</code>, or edit <code>~/.argus/config/argus.env</code> directly for any other setting, then run <code>./argus.sh restart</code>. Restarting replaces the container, but indicators, CrowdSec state and the feed cache live in volumes and carry over.</p>
+<p>To replace the dashboard token, clear <code>ARGUS_TOKEN</code> in <code>argus.env</code>, run <code>./argus.sh init</code> (it generates a new one), then <code>./argus.sh restart</code> and <code>./argus.sh open</code>.</p>
 <p><code>$ARGUS_HOME</code> defaults to <code>~/.argus</code>. To use a different folder, set <code>ARGUS_HOME</code> in your shell before running <code>argus.sh</code>, and keep the path lowercase. The default Mac file system is case-insensitive, so a path like <code>~/Stuff/Argus</code> can quietly land in the same folder as another one, and you end up editing an <code>argus.env</code> that isn't the one being read. The default path is already lowercase, but nothing checks a custom one for you.</p>
 <h3 id="where-things-live">Where things live</h3>
 <table class="table table-sm">
@@ -215,7 +312,8 @@ cd argus
 </ol>
 <p><code>stream on</code> also sets <code>ARGUS_MACOS_TO_CROWDSEC=0</code> and restarts Argus so CrowdSec doesn't count the same event twice. The five-minute collector keeps running and still feeds the dashboard's macOS views. <code>stream off</code> puts everything back the way it was.</p>
 <h2 id="everyday-commands">Everyday commands</h2>
-<pre><code class="language-bash">./argus.sh status | logs | shell | open
+<pre><code class="language-bash">./argus.sh open                 # open the dashboard, signed in
+./argus.sh status | logs | shell
 ./argus.sh cscli alerts list    # anything cscli can do
 ./argus.sh restart              # after editing argus.env
 ./argus.sh destroy              # remove container + volumes, keep config and reports
@@ -390,6 +488,121 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 <li>CrowdSec ignores private IP addresses by default, so brute force from a local network (café Wi-Fi, say) won't raise a CrowdSec alert. Argus's own SSH and Screen Sharing findings still flag it.</li>
 <li>Crash reports and logs that only root can read reach the container through the collector, not through the read-only mounts.</li>
 <li>You only need <code>./argus.sh host-access</code> (which sets up <code>host.container.internal</code>) for services published on the Mac's <code>127.0.0.1</code>. It turns off iCloud Private Relay and doesn't survive a reboot.</li>
+</ul>
+<h2 id="security-hardening">Security hardening</h2>
+<h3 id="whats-already-locked-down">What's already locked down</h3>
+<table class="table table-sm">
+<thead>
+<tr>
+<th>Protection</th>
+<th>Default</th>
+<th>Setting</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container root file system is read-only</td>
+<td>on</td>
+<td><code>ARGUS_READONLY_ROOT=1</code></td>
+</tr>
+<tr>
+<td><code>NET_RAW</code>, <code>MKNOD</code>, <code>SYS_CHROOT</code>, <code>AUDIT_WRITE</code> and <code>SETFCAP</code> dropped</td>
+<td>always</td>
+<td>in <code>argus.sh</code></td>
+</tr>
+<tr>
+<td>Dashboard published on the Mac's loopback only</td>
+<td>always</td>
+<td><code>127.0.0.1:7080</code></td>
+</tr>
+<tr>
+<td>Dashboard needs an access token for everything but its health check</td>
+<td>on</td>
+<td><code>ARGUS_TOKEN</code>, generated by <code>init</code></td>
+</tr>
+<tr>
+<td>Dashboard only answers to localhost names, which blocks DNS rebinding</td>
+<td>always</td>
+<td><code>ARGUS_ALLOWED_HOSTS</code> adds names</td>
+</tr>
+<tr>
+<td>Other websites can't trigger lookups or rescans through your browser</td>
+<td>always</td>
+<td><code>Origin</code> check on every POST</td>
+</tr>
+<tr>
+<td>Syslog listener published on the Mac's loopback only</td>
+<td>on</td>
+<td><code>ARGUS_SYSLOG_BIND=127.0.0.1</code></td>
+</tr>
+<tr>
+<td>Host logs mounted read-only; only <code>$ARGUS_HOME/data</code> is writable</td>
+<td>always</td>
+<td>in <code>argus.sh</code></td>
+</tr>
+<tr>
+<td>Container capped at 2 CPUs and 2 GB of memory</td>
+<td>on</td>
+<td><code>ARGUS_CPUS</code>, <code>ARGUS_MEMORY</code></td>
+</tr>
+<tr>
+<td>Collector inbox readable only by root and you</td>
+<td>always</td>
+<td>set by <code>install-collector</code>, re-checked every 5 minutes</td>
+</tr>
+<tr>
+<td>Collector script owned by root and outside your home folder</td>
+<td>always</td>
+<td><code>/usr/local/libexec/argus/</code></td>
+</tr>
+<tr>
+<td>Config file readable only by you</td>
+<td>always</td>
+<td><code>argus.env</code> is <code>chmod 600</code></td>
+</tr>
+<tr>
+<td>Nothing is ever blocked</td>
+<td>always</td>
+<td>no CrowdSec bouncer is installed</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tightening-it-further">Tightening it further</h3>
+<p><strong>Read the collector before you install it.</strong> It's the only part of Argus that runs as root, and it's short. Read <a href="../collector/argus-collect.sh"><code>collector/argus-collect.sh</code></a> first, and after every <code>git pull</code> run <code>git diff HEAD@{1} -- collector/</code> before you re-run <code>install-collector</code>.</p>
+<p><strong>Send less to outside services.</strong></p>
+<ul>
+<li>Leave any API key blank to keep that provider off. Nothing is sent to a provider without its key.</li>
+<li>Set <code>INTELOWL_AUTO=0</code> so indicators only go to IntelOwl when you look them up by hand.</li>
+<li>Set <code>ARGUS_RDAP_DAILY=0</code> to stop domain-age lookups to rdap.org.</li>
+<li>Set <code>DISABLE_ONLINE_API=true</code> to keep CrowdSec off its hub and community blocklist.</li>
+<li>Shodan InternetDB lookups for public IPs currently have no off switch.</li>
+</ul>
+<p><strong>Keep the network side closed.</strong></p>
+<ul>
+<li>Leave <code>ARGUS_SYSLOG_BIND</code> on <code>127.0.0.1</code> unless you really need syslog from other devices. Syslog has no authentication, so on a LAN address anything that can reach the port can feed Argus fake events. Set <code>ARGUS_SYSLOG=0</code> if you don't use the listener at all.</li>
+<li>Don't run <code>./argus.sh host-access</code> unless a service you need is only published on the Mac's <code>127.0.0.1</code>. It turns off iCloud Private Relay.</li>
+<li>Don't point <code>ARGUS_DNS</code> at your Pi-hole. Argus's own lookups would fill its query log, and blocked threat domains would resolve to <code>0.0.0.0</code>.</li>
+</ul>
+<p><strong>Collect less.</strong></p>
+<ul>
+<li>Keep <code>ARGUS_STREAM_MODE=slice</code>. Use <code>all</code> only for short investigations, then switch back.</li>
+<li>Set <code>ARGUS_MOUNT_HOST_LOGS=0</code> if you don't need <code>/private/var/log</code>, <code>/Library/Logs</code> and <code>~/Library/Logs</code> mounted into the container.</li>
+<li>Lower <code>ARGUS_RETAIN_DAYS</code> (default 7) to keep less history inside the container.</li>
+<li>Avoid passing passwords or tokens as command-line arguments to <code>sudo</code>. The full command line lands in the log slice.</li>
+</ul>
+<p><strong>Pin what you build and load.</strong></p>
+<ul>
+<li><code>image/Dockerfile</code> pulls <code>crowdsecurity/crowdsec:latest</code> and <code>node:24-alpine</code> by tag. Change both <code>ARG</code> lines to <code>@sha256:</code> digests so a rebuild can't silently pick up a different image.</li>
+<li>The dashboard loads Tabler, Alpine.js, Chart.js and PapaParse from jsDelivr by major version (<code>chart.js@4</code> and so on). Pin exact versions, or download them into <code>app/public/vendor/</code> and point <code>index.html</code> there.</li>
+</ul>
+<p><strong>Look after secrets.</strong> <code>argus.env</code> also holds the dashboard token, and anyone with it can read everything Argus knows, so treat it like a password. Use a Pi-hole app password, not your login, so you can revoke it on its own. <code>ls -l ~/.argus/config/argus.env</code> should show <code>-rw-------</code>, and <code>argus.env</code> should never go into git.</p>
+<h3 id="gaps-to-know-about">Gaps to know about</h3>
+<ul>
+<li><strong>The token passes through a URL once.</strong> <code>./argus.sh open</code> puts it in the address it opens. The server swaps it for a cookie and redirects straight away, but that first address can end up in your browser history, and other accounts on the Mac could see it in the process list for the moment <code>open</code> runs. If that worries you, replace the token as described under <a href="#changing-settings">Changing settings</a>.</li>
+<li><strong>No token means no lock.</strong> An <code>argus.env</code> from before the token existed has <code>ARGUS_TOKEN</code> blank, and then anything on this Mac can read the dashboard. <code>./argus.sh up</code> warns about this. Run <code>./argus.sh init</code> and <code>./argus.sh restart</code> to fix it.</li>
+<li><strong>Other containers can reach the ports.</strong> The ports are only on loopback from the Mac's side. Inside the container they accept connections on every interface, so other containers on the same Apple <code>container</code> network can reach them at the Argus container's address. The dashboard still needs the token, but the syslog listener has no such protection.</li>
+<li><strong>Syslog can be spoofed.</strong> Even on loopback, any process on the Mac can send fake syslog lines to the listener.</li>
+<li><strong>Base images and dashboard libraries float</strong> until you pin them as described above.</li>
 </ul>
 <h2 id="security">Security</h2>
 <p><a href="../SECURITY.md">SECURITY.md</a> covers the trust model: what the container can and can't touch, which indicator data leaves the Mac and which providers receive it, how secrets are handled, and notes on the supply chain. <code>sbom.json</code> is a CycloneDX bill of materials for the npm dependencies, Docker base images, Alpine packages and the dashboard libraries loaded from a CDN. <a href="sbom.md">docs/sbom.md</a> has the same information in plain Markdown.</p>

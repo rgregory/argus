@@ -1,6 +1,7 @@
 'use strict';
 // Argus service: ingest loops, threat intel, report builder and dashboard API.
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const express = require('express');
 const engine = require('./lib/engine');
@@ -99,7 +100,67 @@ async function main() {
   app.use(express.json({ limit: '1mb' }));
   app.use((req, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); res.set('Referrer-Policy', 'no-referrer'); next(); });
 
+  // ---- access control -----------------------------------------------------
+  // 1. Host check. Only localhost names are answered, which defeats DNS rebinding: a web
+  //    page can point its own domain at 127.0.0.1, but the browser still sends that
+  //    domain as the Host header.
+  // 2. Origin check on anything but GET/HEAD, so another site can't trigger lookups,
+  //    rescans or feed refreshes through your browser.
+  // 3. Token. Other containers and other accounts on the Mac can forge a Host header,
+  //    so when ARGUS_TOKEN is set (argus.sh init generates one) every route except
+  //    /api/health needs it: once as ?token= (swapped for an HttpOnly cookie and
+  //    redirected away), or as "Authorization: Bearer <token>" for scripts.
+  const allowedHosts = new Set(['127.0.0.1', 'localhost', '::1', ...cfg.http.allowedHosts]);
+  const hostOnly = h => {
+    h = String(h || '').toLowerCase().trim();
+    if (h.startsWith('[')) return h.slice(1, h.indexOf(']') > 0 ? h.indexOf(']') : undefined);
+    return h.replace(/:\d+$/, '');
+  };
+  const tokenOk = t => {
+    if (!cfg.http.token) return true;
+    const a = Buffer.from(String(t || '')), b = Buffer.from(cfg.http.token);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  };
+  const cookieVal = (req, name) => {
+    for (const part of String(req.headers.cookie || '').split(';')) {
+      const i = part.indexOf('=');
+      if (i > 0 && part.slice(0, i).trim() === name) { try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return ''; } }
+    }
+    return '';
+  };
+  const UNAUTH = `<!doctype html><meta charset="utf-8"><title>Argus</title>
+<body style="font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:36rem;margin:4rem auto;padding:0 1rem">
+<h1 style="font-size:1.4rem">Argus needs its access token</h1>
+<p>Run <code>./argus.sh open</code> on this Mac. It opens the dashboard and signs you in.</p>
+<p>Or open <code>http://127.0.0.1:${cfg.httpPort}/?token=&lt;ARGUS_TOKEN&gt;</code> with the value of <code>ARGUS_TOKEN</code> from your <code>argus.env</code>.</p></body>`;
+
+  app.use((req, res, next) => {
+    if (!allowedHosts.has(hostOnly(req.headers.host))) {
+      return res.status(403).type('text').send('Argus only answers on localhost. Add other names to ARGUS_ALLOWED_HOSTS if you really need them.\n');
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin) {
+      let o = '';
+      try { o = new URL(req.headers.origin).hostname.replace(/^\[|\]$/g, '').toLowerCase(); } catch { o = ''; }
+      if (!allowedHosts.has(o)) return res.status(403).json({ error: 'cross-origin request refused' });
+    }
+    next();
+  });
+
   app.get('/api/health', (req, res) => res.json({ ok: true, version: cfg.version, uptime: Date.now() - started }));
+
+  app.use((req, res, next) => {
+    if (!cfg.http.token) return next();
+    const q = typeof req.query.token === 'string' ? req.query.token : '';
+    if (q) {
+      if (!tokenOk(q)) return res.status(401).type('html').send(UNAUTH);
+      res.set('Set-Cookie', `argus_token=${encodeURIComponent(q)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=7776000`);
+      return res.redirect(302, req.path);
+    }
+    const auth = String(req.headers.authorization || '');
+    if (tokenOk(auth.startsWith('Bearer ') ? auth.slice(7).trim() : cookieVal(req, 'argus_token'))) return next();
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'access token required: run ./argus.sh open' });
+    res.status(401).type('html').send(UNAUTH);
+  });
   app.get('/api/report', (req, res) => {
     if (!report || Date.now() - reportAt > 20e3 || req.query.fresh) buildReport();
     res.json(report);

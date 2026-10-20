@@ -18,7 +18,7 @@
 # Compatible with macOS's bash 3.2.
 # =============================================================================
 set -uo pipefail
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 INBOX="${ARGUS_INBOX:-/Users/Shared/Argus/inbox}"
 MAX_BACKLOG_MIN="${ARGUS_MAX_BACKLOG_MIN:-60}"     # catch-up limit after sleep/reboot
@@ -42,7 +42,9 @@ PREDICATE="$(printf '%s' "$PREDICATE" | tr '\n' ' ')"
 
 log() { printf '%s [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${MODE:-?}" "$*"; }
 
-# Write stdin to $1 atomically, world-readable (the container reads as you).
+# Write stdin to $1 atomically. Files are 0644 so the container (which reads the
+# inbox through your account) can open them; the inbox folder itself is
+# root + your account only (see lock_inbox), so other accounts can't reach them.
 put() {
   local dest="$1" tmp="$1.tmp.$$"
   cat > "$tmp" && chmod 0644 "$tmp" && mv -f "$tmp" "$dest"
@@ -144,10 +146,24 @@ write_meta() {
   printf '{"host":"%s","os":"%s","tz":"%s","version":"%s","system_last_run":%s}\n' "$host" "$os" "$tz" "$VERSION" "$(date +%s)" | put "$INBOX/meta.json"
 }
 
+# Keep the inbox folder root-only (0700) with one ACL entry for the account that
+# installed the collector (ARGUS_USER, set in the root-owned LaunchDaemon plist).
+# Re-applied every run in case something loosened it.
+lock_inbox() {
+  [ -n "${ARGUS_USER:-}" ] || return 0   # never lock without knowing who to let in
+  chmod 0700 "$INBOX"
+  if ! ls -led "$INBOX" 2>/dev/null | grep -q " user:$ARGUS_USER allow "; then
+    chmod -N "$INBOX" 2>/dev/null
+    chmod +a "user:$ARGUS_USER allow list,search,readattr,readextattr,readsecurity" "$INBOX" &&
+      log "inbox ACL restored for $ARGUS_USER"
+  fi
+}
+
 run_system() {
   [ "$(id -u)" -eq 0 ] || { echo "system mode must run as root" >&2; exit 1; }
   umask 022
   mkdir -p "$INBOX/unified" "$INBOX/snapshots" "$INBOX/crash" "$INBOX/.state"
+  lock_inbox
   unified_window
   lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null | put "$INBOX/snapshots/established-tcp.txt"
   if stamp_due snapshots "$SNAPSHOT_MIN"; then snapshots; stamp_set snapshots; fi
@@ -184,7 +200,7 @@ MODE="${1:-}"
 case "$MODE" in
   system) run_system ;;
   user)   run_user ;;
-  once)   sudo ARGUS_INBOX="$INBOX" /bin/bash "$0" system && run_user ;;
+  once)   sudo ARGUS_INBOX="$INBOX" ARGUS_USER="$(id -un)" /bin/bash "$0" system && run_user ;;
   version) echo "$VERSION" ;;
   *) echo "usage: $0 system|user|once" >&2; exit 2 ;;
 esac

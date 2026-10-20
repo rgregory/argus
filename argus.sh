@@ -3,13 +3,13 @@
 # argus.sh — build and run the Argus log-analysis container on Apple's
 # `container` runtime, and install the host collector.
 #
-#   ./argus.sh init                 create $ARGUS_HOME (default ~/.argus), config, bouncer key
+#   ./argus.sh init [--no-prompt]   create $ARGUS_HOME (default ~/.argus), config, keys; asks for credentials
 #   ./argus.sh build                build the image (argus:latest); fixes builder DNS if needed
 #   ./argus.sh builder-reset        recreate the builder VM with ARGUS_BUILD_DNS servers
 #   ./argus.sh up | down | restart  start / stop the container
 #   ./argus.sh install-collector    install the root LaunchDaemon + your LaunchAgent
 #   ./argus.sh uninstall-collector
-#   ./argus.sh status | logs | shell | open
+#   ./argus.sh status | logs | shell | open    (open signs the browser in with ARGUS_TOKEN)
 #   ./argus.sh cscli <args>         run cscli inside the container
 #   ./argus.sh stream on|off|status live-stream this Mac's logs to the syslog listener
 #   ./argus.sh syslog-test          send a test message to the listener
@@ -71,12 +71,17 @@ strip_quotes() {
   esac
   printf '%s' "$v"
 }
-set_env_val() { # KEY VALUE
-  if grep -qE "^$1=" "$ENV_FILE"; then
-    sed -i '' "s|^$1=.*|$1=$2|" "$ENV_FILE"
-  else
-    printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"
-  fi
+set_env_val() { # KEY VALUE - writes the value literally (any character but a newline)
+  # awk reads KEY and VALUE from the environment, so pasted secrets containing | & \ or
+  # quotes can't break the edit the way they would in a sed expression.
+  local tmp
+  tmp="$(mktemp "$ENV_FILE.XXXXXX")" || die "can't write next to $ENV_FILE"
+  K="$1" V="$2" awk '
+    BEGIN { k = ENVIRON["K"]; v = ENVIRON["V"]; done = 0 }
+    index($0, k "=") == 1 { if (!done) { print k "=" v; done = 1 } next }
+    { print }
+    END { if (!done) print k "=" v }
+  ' "$ENV_FILE" > "$tmp" && chmod 600 "$tmp" && mv -f "$tmp" "$ENV_FILE"
 }
 
 preflight() {
@@ -95,7 +100,31 @@ container_ip() { # first IPv4 of a container
 host_tz() { readlink /etc/localtime 2>/dev/null | sed 's#.*/zoneinfo/##'; }
 
 # ------------------------------------------------------------------ commands
+# Ask for one setting. Secrets are read without echo. Enter keeps the current value
+# (or skips if there isn't one); a single "-" clears it.
+ask() { # KEY LABEL HELP [secret]
+  local key="$1" label="$2" help="$3" secret="${4:-}" cur v shown
+  cur="$(env_val "$key")"
+  printf '\n  %s\n' "$label"
+  [ -n "$help" ] && printf '  \033[2m%s\033[0m\n' "$help"
+  if [ -n "$cur" ]; then
+    if [ -n "$secret" ]; then shown="set"; else shown="$cur"; fi
+    printf '  [%s] Enter to keep, - to clear: ' "$shown"
+  else
+    printf '  Enter to skip: '
+  fi
+  if [ -n "$secret" ]; then IFS= read -rs v || v=""; echo; else IFS= read -r v || v=""; fi
+  case "$v" in
+    '') ;;
+    -)  set_env_val "$key" "" ;;
+    *)  set_env_val "$key" "$v" ;;
+  esac
+}
+
 cmd_init() {
+  local prompt=1 k set_list=""
+  [ "${1:-}" = "--no-prompt" ] && prompt=0
+  [ -t 0 ] || prompt=0
   mkdir -p "$CFG_DIR" "$DATA_DIR/reports" "$DATA_DIR/exports" "$DATA_DIR/config"
   if [ ! -f "$ENV_FILE" ]; then
     cp "$REPO/argus.env.example" "$ENV_FILE"
@@ -106,13 +135,44 @@ cmd_init() {
     set_env_val BOUNCER_KEY_argus "$(openssl rand -hex 24)"
     ok "generated CrowdSec bouncer key"
   fi
+  if [ -z "$(env_val ARGUS_TOKEN)" ]; then
+    set_env_val ARGUS_TOKEN "$(openssl rand -hex 24)"
+    ok "generated dashboard access token (./argus.sh open signs you in with it)"
+  fi
+
+  if [ "$prompt" = 1 ]; then
+    echo
+    log "credentials: all optional, Enter skips any of them, re-run ./argus.sh init to change them later"
+    printf '\n\033[1mPi-hole\033[0m'
+    ask PIHOLE_URL "Pi-hole URL" "blank = find a running container with pihole in its name"
+    ask PIHOLE_PASSWORD "Pi-hole app password" "Pi-hole > Settings > Web interface / API > Configure app password (not your login password)" secret
+    printf '\n\033[1mIntelOwl\033[0m'
+    ask INTELOWL_URL "IntelOwl URL" "blank = off. Must be reachable from the Argus network, e.g. http://<intelowl-nginx address> (container inspect intelowl-nginx)"
+    ask INTELOWL_TOKEN "IntelOwl API token" "IntelOwl > Account > API access > Generate token" secret
+    printf '\n\033[1mCrowdSec console\033[0m'
+    ask ENROLL_KEY "CrowdSec enroll key" "optional: links this CrowdSec to app.crowdsec.net" secret
+    printf '\n\033[1mThreat-intel API keys\033[0m (each provider stays off without its key)'
+    ask ABUSECH_AUTH_KEY "abuse.ch Auth-Key" "free: https://auth.abuse.ch (needed for the Feodo, URLhaus and ThreatFox feeds)" secret
+    ask CROWDSEC_CTI_KEY "CrowdSec CTI key" "free: app.crowdsec.net > Settings > CTI API keys" secret
+    ask ABUSEIPDB_KEY "AbuseIPDB key" "free: abuseipdb.com > Account > API" secret
+    ask VT_API_KEY "VirusTotal key" "free: virustotal.com > your profile > API key" secret
+    ask OTX_API_KEY "AlienVault OTX key" "free: otx.alienvault.com > Settings > API key" secret
+    ask GREYNOISE_KEY "GreyNoise key" "free Community key: viz.greynoise.io > Account > API key" secret
+    echo
+  fi
+
+  for k in PIHOLE_PASSWORD INTELOWL_TOKEN ENROLL_KEY ABUSECH_AUTH_KEY CROWDSEC_CTI_KEY ABUSEIPDB_KEY VT_API_KEY OTX_API_KEY GREYNOISE_KEY; do
+    [ -n "$(env_val "$k")" ] && set_list="$set_list $k"
+  done
   ok "Argus home: $ARGUS_HOME"
-  echo "    edit $ENV_FILE (Pi-hole password, IntelOwl token, optional API keys), then:"
-  echo "    ./argus.sh build && ./argus.sh install-collector && ./argus.sh up"
+  echo "    credentials set:${set_list:- none (Argus runs fine without them)}"
+  if exists "$NAME" 2>/dev/null; then
+    echo "    Argus is already installed: ./argus.sh restart to apply"
+  else
+    echo "    next: ./argus.sh build && ./argus.sh install-collector && ./argus.sh up"
+  fi
 }
 
-# Recreate the builder VM with explicit nameservers. Its default resolver is the
-# host, which fails when the Mac's DNS points at a local Pi-hole or after network changes.
 builder_reset() {
   local d args=()
   for d in $1; do args+=(--dns "$d"); done
@@ -230,7 +290,7 @@ cmd_up() {
   printf '    waiting for the dashboard '
   local i
   for i in $(seq 1 90); do
-    if curl -fsS "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; then echo; ok "dashboard: http://127.0.0.1:${port}"; break; fi
+    if curl -fsS "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; then echo; ok "dashboard: http://127.0.0.1:${port} (./argus.sh open signs you in)"; break; fi
     printf '.'; sleep 2
     [ "$i" = 90 ] && { echo; warn "not answering yet; check ./argus.sh logs"; }
   done
@@ -238,6 +298,7 @@ cmd_up() {
     ok "syslog: udp ${bind}:${udp}  tcp ${bind}:${tcp}"
   fi
   [ -f "$DAEMON_PLIST" ] || warn "host collector not installed: ./argus.sh install-collector"
+  [ -n "$(env_val ARGUS_TOKEN)" ] || warn "no ARGUS_TOKEN: anything on this Mac can read the dashboard. Run ./argus.sh init, then ./argus.sh restart"
 }
 
 cmd_down() {
@@ -279,6 +340,14 @@ cmd_install_collector() {
   sudo chown "$me":staff "$inbox/user" "$inbox/containers" "$inbox/apps"
   sudo chmod 0755 "$(dirname "$inbox")" "$inbox" "$inbox/unified" "$inbox/snapshots" "$inbox/crash" "$inbox/user" "$inbox/containers" "$inbox/apps"
   sudo chmod 0700 "$inbox/.state"
+  # Lock the inbox to root and you. The folder itself is root-only (0700), and a
+  # single ACL entry lets your account list and enter it. Any other account stops
+  # at this folder, whatever the modes of the files inside. The container reads
+  # the inbox through your account, so it still has access.
+  sudo chmod 0700 "$inbox"
+  sudo chmod -N "$inbox"
+  sudo chmod +a "user:$me allow list,search,readattr,readextattr,readsecurity" "$inbox"
+  ok "inbox readable by root and $me only"
 
   log "writing $DAEMON_PLIST"
   sudo tee "$DAEMON_PLIST" >/dev/null <<EOF
@@ -290,7 +359,7 @@ cmd_install_collector() {
   <key>ProgramArguments</key>
   <array><string>/bin/bash</string><string>$LIBEXEC/argus-collect.sh</string><string>system</string></array>
   <key>EnvironmentVariables</key>
-  <dict><key>ARGUS_INBOX</key><string>$inbox</string></dict>
+  <dict><key>ARGUS_INBOX</key><string>$inbox</string><key>ARGUS_USER</key><string>$me</string></dict>
   <key>StartInterval</key><integer>300</integer>
   <key>RunAtLoad</key><true/>
   <key>ProcessType</key><string>Background</string>
@@ -444,7 +513,10 @@ cmd_stream() {
 cmd_logs()  { container logs -n "${1:-200}" -f "$NAME"; }
 cmd_shell() { container exec -it "$NAME" /bin/bash; }
 cmd_cscli() { container exec "$NAME" cscli "$@"; }
-cmd_open()  { open "http://127.0.0.1:$(env_val ARGUS_HTTP_PORT 7080)"; }
+cmd_open()  { # signs the browser in: the server swaps ?token= for a cookie and redirects
+  local tok; tok="$(env_val ARGUS_TOKEN)"
+  open "http://127.0.0.1:$(env_val ARGUS_HTTP_PORT 7080)/${tok:+?token=$tok}"
+}
 
 cmd_syslog_test() {
   local port; port="$(env_val ARGUS_SYSLOG_UDP_PORT 5514)"
@@ -471,7 +543,7 @@ cmd_destroy() {
 }
 
 case "${1:-}" in
-  init) cmd_init ;;
+  init) shift; cmd_init "$@" ;;
   build) cmd_build ;;
   builder-reset) builder_reset "$(env_val ARGUS_BUILD_DNS '1.1.1.1 9.9.9.9')" ;;
   up|start) cmd_up ;;
