@@ -1,0 +1,15 @@
+{
+  "name": "argus",
+  "version": "1.0.0",
+  "description": "macOS log + syslog analysis with CrowdSec, threat feeds and OSINT enrichment",
+  "private": true,
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

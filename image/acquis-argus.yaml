@@ -1,0 +1,7 @@
+# Argus acquisition: macOS unified-log events (converted to BSD syslog lines by
+# the Argus service) and anything received by the syslog-ng listener.
+filenames:
+  - /var/lib/argus/logs/macos-*.log
+  - /var/lib/argus/logs/remote/*.log
+labels:
+  type: syslog

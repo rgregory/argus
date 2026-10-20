@@ -1,0 +1,131 @@
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+
+const env = (k, d) => (process.env[k] !== undefined && process.env[k] !== '') ? process.env[k] : d;
+const flag = (k, d) => /^(1|true|yes|on)$/i.test(env(k, d ? '1' : '0'));
+const list = (k, d = '') => env(k, d).split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+
+const cfg = {
+  httpPort: +env('ARGUS_HTTP_PORT', 7080),
+  data: env('ARGUS_DATA', '/data'),
+  state: env('ARGUS_STATE', '/var/lib/argus'),
+  inbox: env('ARGUS_INBOX', '/host/inbox'),
+  hostRoot: env('ARGUS_HOST_ROOT', '/host'),
+  macHost: env('ARGUS_MAC_HOST', ''),
+  windowHours: +env('ARGUS_WINDOW_HOURS', 24),
+  retainDays: +env('ARGUS_RETAIN_DAYS', 7),
+  ingestEvery: +env('ARGUS_INGEST_SECONDS', 30) * 1000,
+  pihole: { url: env('PIHOLE_URL', '').replace(/\/+$/, ''), password: env('PIHOLE_PASSWORD', ''), every: +env('PIHOLE_POLL_SECONDS', 120) * 1000 },
+  intelowl: { url: env('INTELOWL_URL', '').replace(/\/+$/, ''), token: env('INTELOWL_TOKEN', ''), playbook: env('INTELOWL_PLAYBOOK', 'FREE_TO_USE_ANALYZERS'),
+    publicUrl: env('INTELOWL_PUBLIC_URL', '').replace(/\/+$/, ''), auto: flag('INTELOWL_AUTO', true), dailyLimit: +env('INTELOWL_DAILY_LIMIT', 50) },
+  keys: {
+    abusech: env('ABUSECH_AUTH_KEY', ''), crowdsecCti: env('CROWDSEC_CTI_KEY', ''), abuseipdb: env('ABUSEIPDB_KEY', ''),
+    virustotal: env('VT_API_KEY', ''), otx: env('OTX_API_KEY', ''), greynoise: env('GREYNOISE_KEY', ''),
+  },
+  crowdsec: { enabled: flag('ARGUS_CROWDSEC', true), lapi: env('CROWDSEC_LAPI_URL', 'http://127.0.0.1:8080'), bouncerKey: env('BOUNCER_KEY_argus', ''), cscli: env('CSCLI', 'cscli') },
+  feeds: { disabled: new Set(list('ARGUS_FEEDS_DISABLE')), hageziList: env('ARGUS_HAGEZI_LIST', 'tif.medium') },
+  osint: { rdapDaily: +env('ARGUS_RDAP_DAILY', 400), enrichDomains: flag('ARGUS_ENRICH_NEW_DOMAINS', true), autoEvery: +env('ARGUS_ENRICH_SECONDS', 20) * 1000 },
+  syslog: { enabled: flag('ARGUS_SYSLOG', true) },
+  // 0 when the Mac streams its unified log live to the syslog listener (argus.sh stream on):
+  // CrowdSec then reads the live copy, so the 5-minute batches are not written for it too.
+  macosToCrowdsec: flag('ARGUS_MACOS_TO_CROWDSEC', true),
+  version: '1.0.0',
+};
+
+const ts = () => { const d = new Date(), z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`; };
+function logger(name) {
+  return {
+    info: (...a) => console.log(`${ts()} [${name}]`, ...a),
+    warn: (...a) => console.warn(`${ts()} [${name}] WARN`, ...a),
+    error: (...a) => console.error(`${ts()} [${name}] ERROR`, ...a),
+  };
+}
+
+async function fetchText(url, opts = {}) {
+  const res = await fetch(url, {
+    method: opts.method || 'GET',
+    headers: { 'User-Agent': `argus/${cfg.version}`, ...(opts.headers || {}) },
+    body: opts.body,
+    redirect: 'follow',
+    signal: AbortSignal.timeout(opts.timeout || 30000),
+  });
+  const text = await res.text();
+  if (opts.maxBytes && text.length > opts.maxBytes) throw new Error(`response too large (${text.length} bytes)`);
+  return { status: res.status, ok: res.ok, text, headers: res.headers };
+}
+async function fetchJson(url, opts = {}) {
+  const r = await fetchText(url, opts);
+  let json = null;
+  try { json = r.text ? JSON.parse(r.text) : null; } catch (e) { /* not JSON */ }
+  return { status: r.status, ok: r.ok, json, text: r.text };
+}
+
+// Run fn every `ms`, never overlapping, never throwing.
+function every(name, ms, fn, log) {
+  let stopped = false;
+  const run = async () => {
+    if (stopped) return;
+    const t0 = Date.now();
+    try { await fn(); } catch (e) { (log || console).error(`${name}: ${e && e.stack || e}`); }
+    if (!stopped) setTimeout(run, Math.max(1000, ms - (Date.now() - t0)));
+  };
+  setTimeout(run, 0);
+  return () => { stopped = true; };
+}
+
+function ipv4ToInt(ip) {
+  const m = String(ip).match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  const p = m.slice(1).map(Number);
+  if (p.some(x => x > 255)) return null;
+  return ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3];
+}
+function cidrRange(cidr) {
+  const [ip, bits] = String(cidr).split('/');
+  const base = ipv4ToInt(ip);
+  const b = bits === undefined ? 32 : +bits;
+  if (base === null || !(b >= 0 && b <= 32)) return null;
+  const size = 2 ** (32 - b);
+  const start = Math.floor(base / size) * size;
+  return [start, start + size - 1];
+}
+function isIp(v) { return ipv4ToInt(v) !== null || /^[0-9a-f]*:[0-9a-f:]+$/i.test(v); }
+function isDomain(v) { return /^(?=.{4,253}$)([a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(v); }
+
+function classifyValue(raw) {
+  let v = String(raw || '').trim().toLowerCase().replace(/^\[|\]$/g, '');
+  if (/^[a-z]+:\/\//.test(v)) { try { v = new URL(v).hostname.replace(/^\[|\]$/g, ''); } catch (e) { return null; } }
+  v = v.replace(/\.$/, '');
+  if (isIp(v)) return { value: v, type: 'ip' };
+  if (isDomain(v)) return { value: v, type: 'domain' };
+  return null;
+}
+
+const csvCell = v => {
+  const s = v === null || v === undefined ? '' : (v instanceof Date ? v.toISOString() : String(v));
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const toCsv = (rows, cols) => [cols.map(c => csvCell(c[0])).join(','), ...rows.map(r => cols.map(c => csvCell(typeof c[1] === 'function' ? c[1](r) : r[c[1]])).join(','))].join('\n') + '\n';
+
+function writeFileAtomic(file, data) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, data);
+  fs.renameSync(tmp, file);
+}
+
+function walk(dir, filter, out = [], depth = 0) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return out; }
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) { if (depth < 6) walk(p, filter, out, depth + 1); }
+    else if (e.isFile() && (!filter || filter(p, e.name))) out.push(p);
+  }
+  return out;
+}
+
+const dayKey = (d = new Date()) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+
+module.exports = { cfg, env, flag, logger, fetchText, fetchJson, every, ipv4ToInt, cidrRange, isIp, isDomain, classifyValue, toCsv, writeFileAtomic, walk, dayKey };

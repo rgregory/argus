@@ -1,0 +1,13 @@
+# Installed by `npm ci` at build time (image/Dockerfile) - never commit these
+app/node_modules/
+app/test/
+
+# A local argus.env, if you ever create one inside the repo by mistake - it
+# belongs in $ARGUS_HOME/config/argus.env, not here, but ignore it either way
+# (argus.env.example doesn't match *.env - different suffix - so it stays tracked)
+*.env
+
+# OS / editor noise
+.DS_Store
+*.log
+*.zip

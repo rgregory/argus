@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Argus</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1/dist/css/tabler.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
+<script>
+  (function () {
+    var t = null; try { t = localStorage.getItem('argus-theme'); } catch (e) {}
+    if (!t) t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-bs-theme', t);
+  })();
+</script>
+<style>
+  body { font-feature-settings: "tnum"; }
+  .mono { font-family: var(--tblr-font-monospace); font-size: .8125rem; word-break: break-all; }
+  /* Tabler's default <pre> text color nearly matches --tblr-bg-surface-secondary in this
+     theme, so the evidence block was rendering real text invisibly (confirmed by
+     select-all over the "blank" area turning up highlighted text). Pin the color
+     explicitly instead of leaving it to inherit. */
+  .evidence { white-space: pre-wrap; max-height: 22rem; overflow: auto; font-size: .78rem; background: var(--tblr-bg-surface-secondary); color: var(--tblr-body-color); border-radius: 4px; padding: .5rem .75rem; margin: .5rem 0 0; }
+  .finding-row { cursor: pointer; }
+  .finding-row:hover { background: var(--tblr-bg-surface-secondary); }
+  .chart-box { position: relative; height: 260px; }
+  .chart-box.sm { height: 180px; }
+  .tab-badge { margin-left: .35rem; }
+  .table-wrap { max-height: 32rem; overflow: auto; }
+  .nowrap { white-space: nowrap; }
+  .kpi { font-size: 1.6rem; font-weight: 600; line-height: 1.1; }
+  .clickable { cursor: pointer; }
+  [x-cloak] { display: none !important; }
+  .navbar-nav .nav-link { padding-left: .6rem; padding-right: .6rem; }
+</style>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<body>
+<div class="page" x-data="argus()" x-init="init()" x-cloak>
+  <!-- header -->
+  <header class="navbar navbar-expand-md d-print-none">
+    <div class="container-xl">
+      <div class="navbar-brand pe-3">
+        <i class="ti ti-eye text-primary me-2" style="font-size:1.4rem"></i><span>Argus</span>
+      </div>
+      <div class="d-none d-md-flex align-items-center gap-2 text-secondary small" x-show="r">
+        <span class="badge bg-secondary-lt" x-text="r && r.host.name ? r.host.name : 'Mac'"></span>
+        <span x-show="r && r.host.os" x-text="r ? 'macOS ' + r.host.os : ''"></span>
+        <span>· updated <span x-text="r ? ago(r.generated) : ''"></span></span>
+      </div>
+      <div class="navbar-nav flex-row order-md-last ms-auto gap-1 align-items-center">
+        <button class="btn btn-ghost-secondary btn-icon" title="Refresh now" @click="load(true)"><i class="ti ti-refresh" :class="loading && 'ti-spin'"></i></button>
+        <button class="btn btn-ghost-secondary btn-icon" title="Toggle theme" @click="toggleTheme()"><i class="ti" :class="theme === 'dark' ? 'ti-sun' : 'ti-moon'"></i></button>
+      </div>
+    </div>
+  </header>
+  <div class="navbar-expand-md border-bottom">
+    <div class="navbar navbar-light">
+      <div class="container-xl">
+        <ul class="navbar-nav flex-row flex-wrap">
+          <template x-for="t in tabs" :key="t.id">
+            <li class="nav-item" :class="tab === t.id && 'active'">
+              <a class="nav-link" href="#" @click.prevent="setTab(t.id)">
+                <span class="nav-link-icon d-inline-block"><i class="ti" :class="t.icon"></i></span>
+                <span class="nav-link-title" x-text="t.label"></span>
+                <span class="badge tab-badge" :class="t.badgeClass ? t.badgeClass() : 'bg-secondary-lt'" x-show="t.badge && t.badge()" x-text="t.badge && t.badge()"></span>
+              </a>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-wrapper">
+    <div class="page-body">
+      <div class="container-xl">
+        <div class="alert alert-danger" x-show="error" x-text="error"></div>
+        <div class="text-center py-6 text-secondary" x-show="!r && !error"><div class="spinner-border mb-3"></div><div>Loading report…</div></div>
+
+        <template x-if="r">
+        <div>
+
+        <!-- ============================================================ OVERVIEW -->
+        <div x-show="tab === 'overview'">
+          <div class="row row-cards mb-3">
+            <template x-for="s in ['high','medium','low','info']" :key="s">
+              <div class="col-6 col-md-3 col-xl">
+                <div class="card card-sm clickable" @click="fSev = [s]; setTab('findings')">
+                  <div class="card-body">
+                    <div class="text-secondary text-uppercase small" x-text="s + ' findings'"></div>
+                    <div class="kpi" :class="sevText(s)" x-text="num(r.counts[s])"></div>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div class="col-6 col-md-3 col-xl">
+              <div class="card card-sm clickable" @click="iRisk = 'flagged'; setTab('indicators')">
+                <div class="card-body"><div class="text-secondary text-uppercase small">Flagged indicators</div>
+                  <div class="kpi" :class="(r.intel.malicious || 0) ? 'text-red' : ''" x-text="num((r.intel.malicious || 0) + (r.intel.suspicious || 0))"></div>
+                  <div class="small text-secondary" x-text="num(r.intel.total || 0) + ' tracked'"></div></div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3 col-xl">
+              <div class="card card-sm clickable" @click="setTab('crowdsec')">
+                <div class="card-body"><div class="text-secondary text-uppercase small">CrowdSec alerts</div>
+                  <div class="kpi" x-text="num(r.crowdsec.alerts.length)"></div>
+                  <div class="small text-secondary" x-text="num(r.crowdsec.decisions) + ' blocklist entries'"></div></div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3 col-xl">
+              <div class="card card-sm clickable" @click="setTab('throughput')">
+                <div class="card-body"><div class="text-secondary text-uppercase small">Ingest (24 h)</div>
+                  <div class="kpi" x-text="num(tpTotal('events'))"></div>
+                  <div class="small text-secondary" x-text="bytes(tpTotal('bytes')) + ' · ' + rate(tpRate()) "></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row row-cards mb-3">
+            <div class="col-lg-8">
+              <div class="card h-100">
+                <div class="card-header"><h3 class="card-title">Security events per hour</h3>
+                  <div class="card-actions small text-secondary" x-text="r.window.from ? fmt(r.window.from) + ' → ' + fmt(r.window.to) : 'no macOS events yet'"></div></div>
+                <div class="card-body"><div class="chart-box" style="height:360px"><canvas id="ch-timeline"></canvas></div>
+                  <div class="text-secondary small mt-2" x-show="!r.timeline.length">No unified-log events yet. Install the host collector (<code>./argus.sh install-collector</code>) and give it five minutes.</div></div>
+              </div>
+            </div>
+            <div class="col-lg-4">
+              <div class="card h-100">
+                <div class="card-header"><h3 class="card-title">Posture</h3></div>
+                <div class="list-group list-group-flush">
+                  <template x-for="p in r.posture" :key="p.control">
+                    <div class="list-group-item py-1" :title="p.why || ''">
+                      <div class="d-flex align-items-start gap-2 small">
+                        <i class="ti mt-1" :class="statusIcon(p.status)"></i>
+                        <div class="flex-fill text-truncate"><span x-text="p.control"></span><div class="text-secondary text-truncate" x-text="p.value"></div></div>
+                      </div>
+                    </div>
+                  </template>
+                  <div class="list-group-item text-secondary small" x-show="!r.posture.length">Waiting for the first posture snapshot from the collector.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h3 class="card-title">Top findings</h3><div class="card-actions"><a href="#" @click.prevent="setTab('findings')">All findings →</a></div></div>
+            <div class="list-group list-group-flush">
+              <template x-for="f in r.findings.filter(x => x.sev === 'high' || x.sev === 'medium').slice(0, 10)" :key="f.id">
+                <div class="list-group-item finding-row" @click="openFinding = openFinding === f.id ? null : f.id">
+                  <div class="d-flex gap-2 align-items-center">
+                    <span class="badge" :class="sevBadge(f.sev)" x-text="f.sev"></span>
+                    <span class="badge bg-secondary-lt" x-text="f.area"></span>
+                    <span class="flex-fill" x-text="f.title"></span>
+                  </div>
+                  <pre class="evidence" x-show="openFinding === f.id" x-text="(f.detail ? f.detail + '\n\n' : '') + f.evidence.join('\n')"></pre>
+                </div>
+              </template>
+              <div class="list-group-item text-secondary" x-show="!r.findings.some(x => x.sev === 'high' || x.sev === 'medium')">No high or medium findings.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ FINDINGS -->
+        <div x-show="tab === 'findings'">
+          <div class="card">
+            <div class="card-header flex-wrap gap-2">
+              <div class="btn-group" role="group">
+                <template x-for="s in ['high','medium','low','info']" :key="s">
+                  <button class="btn btn-sm" :class="fSev.includes(s) ? 'btn-primary' : ''" @click="toggleSev(s)" x-text="s + ' (' + r.counts[s] + ')'"></button>
+                </template>
+              </div>
+              <select class="form-select form-select-sm w-auto" x-model="fArea">
+                <option value="">All areas</option>
+                <template x-for="a in areas()" :key="a"><option :value="a" x-text="a"></option></template>
+              </select>
+              <input class="form-control form-control-sm w-auto flex-fill" placeholder="Search findings and evidence" x-model.debounce.250ms="fQ">
+              <div class="ms-auto btn-list">
+                <button class="btn btn-sm" @click="csv('argus-findings', filteredFindings().map(f => ({id: f.id, severity: f.sev, area: f.area, title: f.title, count: f.count, detail: f.detail, evidence: f.evidence.join(' | ')})))"><i class="ti ti-download"></i> CSV</button>
+              </div>
+            </div>
+            <div class="list-group list-group-flush">
+              <template x-for="f in filteredFindings().slice(0, fLimit)" :key="f.id">
+                <div class="list-group-item finding-row" @click="openFinding = openFinding === f.id ? null : f.id">
+                  <div class="d-flex gap-2 align-items-center flex-wrap">
+                    <span class="badge" :class="sevBadge(f.sev)" x-text="f.sev"></span>
+                    <span class="badge bg-secondary-lt" x-text="f.area"></span>
+                    <span class="flex-fill" x-text="f.title"></span>
+                    <span class="text-secondary small" x-text="f.source"></span>
+                    <button class="btn btn-sm btn-ghost-primary" x-show="f.indicator" @click.stop="openIndicator(f.indicator.type, f.indicator.value)">Details</button>
+                  </div>
+                  <div x-show="openFinding === f.id">
+                    <div class="text-secondary small mt-2" x-show="f.detail" x-text="f.detail"></div>
+                    <pre class="evidence" x-text="f.evidence.join('\n')"></pre>
+                  </div>
+                </div>
+              </template>
+              <div class="list-group-item text-secondary" x-show="!filteredFindings().length">Nothing matches these filters.</div>
+              <div class="list-group-item text-center" x-show="filteredFindings().length > fLimit"><button class="btn btn-sm" @click="fLimit += 100">Show more</button></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ INDICATORS -->
+        <div x-show="tab === 'indicators'">
+          <div class="card mb-3">
+            <div class="card-body">
+              <form class="row g-2 align-items-center" @submit.prevent="lookup()">
+                <div class="col-md"><input class="form-control" placeholder="Look up an IP, domain or URL across feeds, CrowdSec and OSINT sources" x-model="lookupQ"></div>
+                <div class="col-auto"><button class="btn btn-primary" :disabled="lookupBusy || !lookupQ"><span class="spinner-border spinner-border-sm me-2" x-show="lookupBusy"></span><i class="ti ti-search me-1" x-show="!lookupBusy"></i>Look up</button></div>
+              </form>
+              <div class="text-danger small mt-2" x-show="lookupErr" x-text="lookupErr"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header flex-wrap gap-2">
+              <select class="form-select form-select-sm w-auto" x-model="iRisk" @change="iOffset = 0; loadIndicators()">
+                <option value="flagged">Flagged (malicious + suspicious)</option><option value="malicious">Malicious</option><option value="suspicious">Suspicious</option>
+                <option value="clean">Clean</option><option value="unknown">Not yet rated</option><option value="">All</option>
+              </select>
+              <select class="form-select form-select-sm w-auto" x-model="iType" @change="iOffset = 0; loadIndicators()">
+                <option value="">IPs and domains</option><option value="ip">IPs</option><option value="domain">Domains</option>
+              </select>
+              <select class="form-select form-select-sm w-auto" x-model="iSource" @change="iOffset = 0; loadIndicators()">
+                <option value="">Any source</option><option value="connection">Active connections</option><option value="dns">DNS (Pi-hole)</option><option value="dns-heuristic">DNS heuristics</option>
+                <option value="ssh">SSH</option><option value="firewall">Firewall</option><option value="syslog">Syslog</option><option value="resolved">Resolved</option><option value="manual">Manual lookups</option>
+              </select>
+              <input class="form-control form-control-sm w-auto flex-fill" placeholder="Filter by value" x-model.debounce.400ms="iQ" @input.debounce.400ms="iOffset = 0; loadIndicators()">
+              <div class="ms-auto btn-list">
+                <a class="btn btn-sm" href="/api/export/indicators.csv"><i class="ti ti-download"></i> Flagged CSV</a>
+              </div>
+            </div>
+            <div class="table-responsive table-wrap">
+              <table class="table table-vcenter card-table table-sm">
+                <thead><tr><th>Indicator</th><th>Risk</th><th>Why</th><th>Sources</th><th class="text-end">Hits</th><th>Last seen</th></tr></thead>
+                <tbody>
+                  <template x-for="o in ind.rows" :key="o.type + o.value">
+                    <tr class="clickable" @click="openIndicator(o.type, o.value)">
+                      <td><span class="mono" x-text="o.value"></span> <span class="badge bg-secondary-lt" x-text="o.type"></span></td>
+                      <td><span class="badge" :class="riskBadge(o.risk)" x-text="o.risk + (o.risk_score ? ' ' + o.risk_score : '')"></span></td>
+                      <td class="small text-secondary" x-text="(o.reasons[0] || '') + (o.reasons.length > 1 ? ' (+' + (o.reasons.length - 1) + ')' : '')"></td>
+                      <td class="small" x-text="o.sources.join(', ')"></td>
+                      <td class="text-end" x-text="num(o.hits)"></td>
+                      <td class="small nowrap" x-text="ago(o.last_seen)"></td>
+                    </tr>
+                  </template>
+                  <tr x-show="!ind.rows.length"><td colspan="6" class="text-secondary">No indicators match. Indicators come from active connections, Pi-hole DNS, SSH/firewall events and syslog.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-footer d-flex align-items-center">
+              <span class="text-secondary small" x-text="ind.total ? (iOffset + 1) + '–' + Math.min(iOffset + 200, ind.total) + ' of ' + num(ind.total) : ''"></span>
+              <div class="ms-auto btn-list">
+                <button class="btn btn-sm" :disabled="iOffset === 0" @click="iOffset = Math.max(0, iOffset - 200); loadIndicators()">Previous</button>
+                <button class="btn btn-sm" :disabled="iOffset + 200 >= ind.total" @click="iOffset += 200; loadIndicators()">Next</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ CROWDSEC -->
+        <div x-show="tab === 'crowdsec'">
+          <div class="alert alert-warning" x-show="r.crowdsec.error || r.crowdsec.alertError" x-text="'CrowdSec: ' + [r.crowdsec.error, r.crowdsec.alertError].filter(Boolean).join(' · ')"></div>
+          <div class="row row-cards mb-3">
+            <div class="col-md-3"><div class="card card-sm"><div class="card-body"><div class="text-secondary small text-uppercase">Alerts</div><div class="kpi" x-text="num(r.crowdsec.alerts.length)"></div><div class="small text-secondary" x-text="'synced ' + ago(r.crowdsec.lastAlerts)"></div></div></div></div>
+            <div class="col-md-3"><div class="card card-sm"><div class="card-body"><div class="text-secondary small text-uppercase">Decisions known</div><div class="kpi" x-text="num(r.crowdsec.decisions)"></div><div class="small text-secondary" x-text="'synced ' + ago(r.crowdsec.lastStream)"></div></div></div></div>
+            <div class="col-md-6"><div class="card card-sm h-100"><div class="card-body"><div class="text-secondary small text-uppercase mb-2">By origin</div>
+              <template x-for="[k, v] in Object.entries(r.crowdsec.byOrigin || {})" :key="k"><span class="badge bg-azure-lt me-1 mb-1" x-text="k + ': ' + num(v)"></span></template>
+              <div class="small text-secondary mt-1">CAPI and lists are the community blocklist; "crowdsec" means detected here. Argus is detection-only: no bouncer blocks traffic on the Mac.</div></div></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3 class="card-title">Alerts</h3></div>
+            <div class="table-responsive table-wrap">
+              <table class="table table-sm table-vcenter card-table">
+                <thead><tr><th>When</th><th>Scenario</th><th>Source</th><th>Origin</th><th class="text-end">Events</th><th class="text-end">Decisions</th></tr></thead>
+                <tbody>
+                  <template x-for="a in r.crowdsec.alerts" :key="a.id">
+                    <tr><td class="nowrap small" x-text="fmt(a.created)"></td><td x-text="a.scenario"></td>
+                      <td><a href="#" class="mono" @click.prevent="a.ip && openIndicator('ip', a.ip)" x-text="a.ip"></a></td>
+                      <td class="small" x-text="[a.cn, a.as].filter(Boolean).join(' · ')"></td><td class="text-end" x-text="a.events"></td><td class="text-end" x-text="a.decisions"></td></tr>
+                  </template>
+                  <tr x-show="!r.crowdsec.alerts.length"><td colspan="6" class="text-secondary">No alerts. CrowdSec reads the macOS events Argus converts plus anything sent to the syslog listener.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ MACOS -->
+        <div x-show="tab === 'macos'">
+          <ul class="nav nav-pills mb-3 flex-wrap">
+            <template x-for="s in macTabs" :key="s.id">
+              <li class="nav-item"><a href="#" class="nav-link" :class="macTab === s.id && 'active'" @click.prevent="macTab = s.id" x-text="s.label"></a></li>
+            </template>
+          </ul>
+
+          <!-- access -->
+          <div x-show="macTab === 'access'" class="row row-cards">
+            <div class="col-12"><div class="card">
+              <div class="card-header"><h3 class="card-title">sudo</h3>
+                <div class="card-actions"><label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" x-model="hideCollector"><span class="form-check-label small">Hide collector commands</span></label></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>When</th><th>User</th><th>As</th><th>Command</th><th>Result</th></tr></thead>
+                <tbody><template x-for="(s, i) in r.macos.access.sudo.filter(x => !hideCollector || !x.collector).slice().reverse().slice(0, 500)" :key="i">
+                  <tr><td class="nowrap small" x-text="fmt(s.ts)"></td><td x-text="s.user"></td><td x-text="s.runas"></td>
+                    <td class="mono"><span x-text="s.command"></span> <span class="badge bg-orange-lt" x-show="s.risk" x-text="s.risk"></span></td>
+                    <td><span class="badge" :class="s.ok ? 'bg-green-lt' : 'bg-red-lt'" x-text="s.ok ? 'ok' : (s.reason || 'failed')"></span></td></tr>
+                </template></tbody></table></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">SSH and Screen Sharing</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>When</th><th>Service</th><th>User</th><th>From</th><th>Result</th></tr></thead>
+                <tbody>
+                  <template x-for="(e, i) in remoteAccess()" :key="i"><tr><td class="small nowrap" x-text="fmt(e.ts)"></td><td x-text="e.svc"></td><td x-text="e.user"></td><td class="mono" x-text="e.ip"></td>
+                    <td><span class="badge" :class="e.ok ? 'bg-green-lt' : 'bg-red-lt'" x-text="e.ok ? 'ok' : 'failed'"></span></td></tr></template>
+                  <tr x-show="!remoteAccess().length"><td colspan="5" class="text-secondary">No remote access events.</td></tr>
+                </tbody></table></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Login history</h3><div class="card-actions small text-secondary" x-text="'screen locks: ' + r.macos.access.locks.lock + ' · unlocks: ' + r.macos.access.locks.unlock"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>When</th><th>User</th><th>TTY</th><th>From</th><th>Session</th></tr></thead>
+                <tbody><template x-for="(l, i) in r.macos.access.logins.slice(0, 300)" :key="i"><tr :class="l.remote && 'table-warning'"><td class="small nowrap" x-text="fmt(l.ts)"></td><td x-text="l.user"></td><td x-text="l.tty"></td><td x-text="l.host"></td><td class="small" x-text="l.session"></td></tr></template></tbody></table></div></div></div>
+            <div class="col-12"><div class="card">
+              <div class="card-header"><h3 class="card-title">Authorization rights (admin prompts)</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Right</th><th>Client</th><th class="text-end">OK</th><th class="text-end">Failed</th><th>Last</th></tr></thead>
+                <tbody><template x-for="(a, i) in r.macos.access.authd.slice(0, 200)" :key="i"><tr><td class="mono" x-text="a.right"></td><td class="mono small" x-text="a.client"></td><td class="text-end" x-text="a.ok"></td><td class="text-end" :class="a.fail && 'text-red'" x-text="a.fail"></td><td class="small nowrap" x-text="fmt(a.last)"></td></tr></template></tbody></table></div></div></div>
+          </div>
+
+          <!-- permissions -->
+          <div x-show="macTab === 'permissions'" class="row row-cards">
+            <div class="col-12"><div class="card">
+              <div class="card-header"><h3 class="card-title">Privacy permissions (TCC) in use</h3>
+                <div class="card-actions"><label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" x-model="thirdPartyTcc"><span class="form-check-label small">Third-party apps only</span></label></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>App</th><th>Permission</th><th class="text-end">Allowed</th><th class="text-end">Denied</th><th class="text-end">Checks</th><th>Last</th></tr></thead>
+                <tbody><template x-for="(t, i) in r.macos.protect.tcc.filter(x => !thirdPartyTcc || !x.apple).slice(0, 400)" :key="i">
+                  <tr><td class="mono small" x-text="t.client"></td><td><span x-text="t.serviceName"></span> <span class="badge bg-orange-lt" x-show="t.high">high impact</span></td>
+                    <td class="text-end" x-text="t.allowed"></td><td class="text-end" x-text="t.denied"></td><td class="text-end text-secondary" x-text="t.preflight"></td><td class="small nowrap" x-text="fmt(t.last)"></td></tr>
+                </template></tbody></table></div></div></div>
+            <div class="col-lg-7"><div class="card">
+              <div class="card-header"><h3 class="card-title">Gatekeeper and XProtect</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Last</th><th>Outcome</th><th>Item</th><th>Team</th><th class="text-end">×</th></tr></thead>
+                <tbody>
+                  <template x-for="(g, i) in r.macos.protect.gatekeeper.filter(x => x.outcome !== 'scan' || showScans).slice(0, 300)" :key="i">
+                    <tr><td class="small nowrap" x-text="fmt(g.last)"></td><td><span class="badge" :class="g.outcome === 'malware' ? 'bg-red-lt' : g.outcome === 'blocked' ? 'bg-orange-lt' : 'bg-secondary-lt'" x-text="g.outcome"></span></td>
+                      <td class="mono small" x-text="g.path || g.sample"></td><td class="small" x-text="g.team || '—'"></td><td class="text-end" x-text="g.count"></td></tr>
+                  </template>
+                  <template x-for="(x, i) in r.macos.protect.xprotect.slice(-100).reverse()" :key="'x' + i">
+                    <tr><td class="small nowrap" x-text="fmt(x.ts)"></td><td><span class="badge" :class="x.high ? 'bg-red-lt' : 'bg-yellow-lt'">XProtect</span></td><td class="small" colspan="2" x-text="x.proc + ': ' + x.msg"></td><td class="text-end" x-text="x.count"></td></tr>
+                  </template>
+                </tbody></table></div>
+              <div class="card-footer"><label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" x-model="showScans"><span class="form-check-label small">Include routine scans</span></label></div></div></div>
+            <div class="col-lg-5"><div class="card">
+              <div class="card-header"><h3 class="card-title">Firewall: inbound sources</h3><div class="card-actions small text-secondary" x-text="num(r.macos.protect.firewall.events) + ' events'"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Source</th><th>Scope</th><th class="text-end">Attempts</th><th>Ports</th></tr></thead>
+                <tbody><template x-for="(s, i) in r.macos.protect.firewall.sources.slice(0, 200)" :key="i"><tr><td class="mono" x-text="s.src"></td><td><span class="badge bg-secondary-lt" x-text="s.scope"></span></td><td class="text-end" x-text="s.count"></td><td class="small" x-text="s.ports"></td></tr></template>
+                <tr x-show="!r.macos.protect.firewall.sources.length"><td colspan="4" class="text-secondary">No firewall events (normal when nothing probes this Mac).</td></tr></tbody></table></div></div></div>
+          </div>
+
+          <!-- persistence -->
+          <div x-show="macTab === 'persistence'" class="row row-cards">
+            <div class="col-12"><div class="card">
+              <div class="card-header"><h3 class="card-title">Launch agents and daemons</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Label</th><th>Type</th><th>Program</th><th>Flags</th><th>Modified</th></tr></thead>
+                <tbody><template x-for="(l, i) in r.macos.persistence.launch" :key="i">
+                  <tr><td class="mono small" x-text="l.label"></td><td class="small" x-text="l.domain"></td><td class="mono small" x-text="l.args.join(' ') || l.program"></td>
+                    <td><template x-for="fl in l.flags" :key="fl"><span class="badge me-1" :class="sevBadge(l.sev === 'info' ? 'info' : l.sev)" x-text="fl"></span></template></td><td class="small nowrap" x-text="fmt(l.mtime)"></td></tr>
+                </template>
+                <tr x-show="!r.macos.persistence.launch.length"><td colspan="5" class="text-secondary">No launch-item snapshot yet.</td></tr></tbody></table></div></div></div>
+            <div class="col-12"><div class="card">
+              <div class="card-header"><h3 class="card-title">Background items (Login Items &amp; Extensions)</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Name</th><th>Developer</th><th>Team</th><th>Type</th><th>State</th><th>Executable</th></tr></thead>
+                <tbody><template x-for="(b, i) in r.macos.persistence.btm" :key="i">
+                  <tr><td x-text="b.name || b.ident"></td><td class="small" x-text="b.developer"></td><td class="small"><span x-text="b.team || '—'"></span></td><td class="small" x-text="b.type"></td>
+                    <td><span class="badge" :class="b.enabled ? 'bg-green-lt' : 'bg-secondary-lt'" x-text="b.enabled ? 'enabled' : 'disabled'"></span></td><td class="mono small" x-text="b.exe || b.url"></td></tr>
+                </template></tbody></table></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">System extensions</h3></div>
+              <div class="table-responsive"><table class="table table-sm card-table"><thead><tr><th>Name</th><th>Category</th><th>Team</th><th>State</th></tr></thead>
+                <tbody><template x-for="(s, i) in r.macos.persistence.sysext" :key="i"><tr><td x-text="s.name"></td><td class="small" x-text="s.category"></td><td class="small" x-text="s.team"></td><td class="small" x-text="s.state"></td></tr></template>
+                <tr x-show="!r.macos.persistence.sysext.length"><td colspan="4" class="text-secondary">None reported.</td></tr></tbody></table></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Other persistence</h3></div>
+              <div class="card-body small">
+                <div class="mb-2"><strong>Configuration profiles:</strong> <span x-text="r.macos.persistence.profiles.join(', ') || 'none'"></span></div>
+                <div class="mb-2"><strong>crontab:</strong> <span class="mono" x-text="r.macos.persistence.cron.join(' ; ') || 'none'"></span></div>
+                <div><strong>Third-party launchd jobs (your session):</strong>
+                  <template x-for="(a, i) in r.macos.persistence.agents.slice(0, 60)" :key="i"><div class="mono"><span x-text="a.label"></span> <span class="text-secondary" x-text="a.status ? '(exit ' + a.status + ')' : (a.pid ? '(running)' : '')"></span></div></template>
+                </div>
+              </div></div></div>
+          </div>
+
+          <!-- network -->
+          <div x-show="macTab === 'network'" class="row row-cards">
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Listening TCP services</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Process</th><th>Address</th><th>Port</th><th>Exposure</th></tr></thead>
+                <tbody><template x-for="(t, i) in r.macos.network.tcp" :key="i">
+                  <tr><td><span x-text="t.cmd"></span> <span class="text-secondary small" x-text="'pid ' + t.pid"></span></td><td class="mono" x-text="t.host"></td>
+                    <td><span x-text="t.port"></span> <span class="text-secondary small" x-text="t.service"></span></td>
+                    <td><span class="badge" :class="t.scope === 'loopback' ? 'bg-green-lt' : (t.apple ? 'bg-secondary-lt' : 'bg-orange-lt')" x-text="t.scope === 'loopback' ? 'this Mac only' : t.scope === 'any' ? 'all interfaces' : t.scope"></span></td></tr>
+                </template></tbody></table></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Public endpoints this Mac is talking to</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Remote IP</th><th>Ports</th><th>Processes</th><th class="text-end">Conns</th></tr></thead>
+                <tbody><template x-for="(c, i) in r.macos.network.remotes" :key="i">
+                  <tr class="clickable" @click="openIndicator('ip', c.ip)"><td class="mono" x-text="c.ip"></td><td class="small" x-text="c.ports"></td><td class="small" x-text="c.procs"></td><td class="text-end" x-text="c.count"></td></tr>
+                </template>
+                <tr x-show="!r.macos.network.remotes.length"><td colspan="4" class="text-secondary">No connection snapshot yet.</td></tr></tbody></table></div></div></div>
+          </div>
+
+          <!-- crashes -->
+          <div x-show="macTab === 'crashes'" class="card">
+            <div class="card-header"><h3 class="card-title">Crash and diagnostic reports (14 days)</h3></div>
+            <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+              <thead><tr><th>When</th><th>App</th><th>Kind</th><th>Exception / detail</th><th>Path</th></tr></thead>
+              <tbody><template x-for="(c, i) in r.macos.crashes.slice(0, 500)" :key="i">
+                <tr><td class="small nowrap" x-text="fmt(c.ts)"></td><td x-text="c.app"></td><td><span class="badge" :class="c.kind === 'Kernel panic' ? 'bg-red-lt' : 'bg-secondary-lt'" x-text="c.kind"></span></td>
+                  <td class="small" x-text="[c.exception, c.detail].filter(Boolean).join(' — ')"></td><td class="mono small" x-text="c.procPath"></td></tr>
+              </template>
+              <tr x-show="!r.macos.crashes.length"><td colspan="5" class="text-secondary">No reports in the last 14 days.</td></tr></tbody></table></div>
+          </div>
+
+          <!-- system -->
+          <div x-show="macTab === 'system'" class="row row-cards">
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Fault-heavy processes</h3><div class="card-actions small text-secondary" x-text="num(r.macos.system.faultCount) + ' faults'"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table"><thead><tr><th>Process</th><th>Subsystem</th><th class="text-end">Faults</th></tr></thead>
+                <tbody><template x-for="(f, i) in r.macos.system.faults.slice(0, 60)" :key="i"><tr :title="f.sample"><td x-text="f.proc"></td><td class="small mono" x-text="f.sub"></td><td class="text-end" x-text="num(f.count)"></td></tr></template></tbody></table></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Sleep and wake</h3></div>
+              <div class="card-body"><div class="chart-box sm"><canvas id="ch-power"></canvas></div>
+                <div class="small mt-2"><template x-for="x in r.macos.system.power.reasons.slice(0, 8)" :key="x.key"><div><span x-text="x.key"></span> <span class="text-secondary" x-text="'×' + x.count"></span></div></template></div></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Installs and updates</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table"><thead><tr><th>When</th><th>Name</th><th>Version</th></tr></thead>
+                <tbody><template x-for="(u, i) in r.macos.system.installs.slice(0, 200)" :key="i"><tr><td class="small nowrap" x-text="fmt(u.ts)"></td><td x-text="u.name"></td><td class="small" x-text="u.version"></td></tr></template></tbody></table></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Containers</h3></div>
+              <div class="table-responsive"><table class="table table-sm card-table"><thead><tr><th>Container</th><th>State</th><th class="text-end">Log lines</th><th class="text-end">Errors</th></tr></thead>
+                <tbody><template x-for="(c, i) in containerRows()" :key="i"><tr :title="c.sample"><td x-text="c.name"></td><td class="small" x-text="c.state"></td><td class="text-end" x-text="c.lines"></td><td class="text-end" :class="c.errors > 20 && 'text-orange'" x-text="c.errors"></td></tr></template></tbody></table></div></div></div>
+            <div class="col-12" x-show="r.macos.ollama"><div class="card">
+              <div class="card-header"><h3 class="card-title">Ollama API</h3></div>
+              <div class="card-body small" x-show="r.macos.ollama"><div x-text="r.macos.ollama ? num(r.macos.ollama.requests) + ' requests' : ''"></div>
+                <template x-for="c in (r.macos.ollama ? r.macos.ollama.clients : [])" :key="c.key"><span class="badge me-1" :class="c.scope === 'loopback' ? 'bg-green-lt' : 'bg-orange-lt'" x-text="c.key + ' ×' + c.count"></span></template></div></div></div>
+          </div>
+        </div>
+
+        <!-- ============================================================ DNS -->
+        <div x-show="tab === 'dns'">
+          <div class="card" x-show="!r.dns"><div class="card-body">
+            <h3>No DNS data yet</h3>
+            <p class="text-secondary mb-0">Set <code>PIHOLE_URL</code> and <code>PIHOLE_PASSWORD</code> (an app password) in <code>argus.env</code>, or let the host collector copy the Pi-hole query log. Every queried domain is checked against threat feeds; new domains get an RDAP age check.</p>
+          </div></div>
+          <template x-if="r.dns"><div>
+            <div class="alert alert-warning" x-show="r.inputs.pihole.error" x-text="'Pi-hole: ' + r.inputs.pihole.error"></div>
+            <div class="row row-cards mb-3">
+              <div class="col-6 col-md-3"><div class="card card-sm"><div class="card-body"><div class="small text-secondary text-uppercase">Queries</div><div class="kpi" x-text="num(r.dns.queries)"></div></div></div></div>
+              <div class="col-6 col-md-3"><div class="card card-sm"><div class="card-body"><div class="small text-secondary text-uppercase">Blocked</div><div class="kpi" x-text="r.dns.queries ? (100 * r.dns.blocked / r.dns.queries).toFixed(1) + '%' : '—'"></div></div></div></div>
+              <div class="col-6 col-md-3"><div class="card card-sm"><div class="card-body"><div class="small text-secondary text-uppercase">Unique domains</div><div class="kpi" x-text="num(r.dns.unique)"></div></div></div></div>
+              <div class="col-6 col-md-3"><div class="card card-sm"><div class="card-body"><div class="small text-secondary text-uppercase">Suspicious names</div><div class="kpi" :class="r.dns.suspicious.length && 'text-orange'" x-text="num(r.dns.suspicious.length)"></div></div></div></div>
+            </div>
+            <div class="card mb-3"><div class="card-header"><h3 class="card-title">Queries per hour</h3></div><div class="card-body"><div class="chart-box sm"><canvas id="ch-dns"></canvas></div></div></div>
+            <div class="row row-cards">
+              <div class="col-lg-6"><div class="card"><div class="card-header"><h3 class="card-title">Suspicious-looking names</h3></div>
+                <div class="table-responsive table-wrap"><table class="table table-sm card-table"><thead><tr><th>Domain</th><th>Why</th><th class="text-end">Queries</th></tr></thead>
+                  <tbody><template x-for="(s, i) in r.dns.suspicious.slice(0, 200)" :key="i"><tr class="clickable" @click="!s.domain.startsWith('*') && openIndicator('domain', s.domain)"><td class="mono small" x-text="s.domain"></td><td class="small" x-text="s.reasons"></td><td class="text-end" x-text="s.queries"></td></tr></template>
+                  <tr x-show="!r.dns.suspicious.length"><td colspan="3" class="text-secondary">Nothing stands out.</td></tr></tbody></table></div></div></div>
+              <div class="col-lg-6"><div class="card"><div class="card-header"><h3 class="card-title">Top registered domains</h3></div>
+                <div class="table-responsive table-wrap"><table class="table table-sm card-table"><tbody><template x-for="d in r.dns.topBases" :key="d.key"><tr><td class="mono small" x-text="d.key"></td><td class="text-end" x-text="num(d.count)"></td></tr></template></tbody></table></div></div></div>
+              <div class="col-lg-6"><div class="card"><div class="card-header"><h3 class="card-title">Top blocked</h3></div>
+                <div class="table-responsive table-wrap"><table class="table table-sm card-table"><tbody><template x-for="d in r.dns.topBlocked" :key="d.key"><tr><td class="mono small" x-text="d.key"></td><td class="text-end" x-text="num(d.count)"></td></tr></template></tbody></table></div></div></div>
+              <div class="col-lg-6"><div class="card"><div class="card-header"><h3 class="card-title">Clients</h3></div>
+                <div class="table-responsive table-wrap"><table class="table table-sm card-table"><tbody><template x-for="d in r.dns.clients" :key="d.key"><tr><td class="mono small" x-text="d.key"></td><td class="text-end" x-text="num(d.count)"></td></tr></template></tbody></table></div></div></div>
+            </div>
+          </div></template>
+        </div>
+
+        <!-- ============================================================ SYSLOG -->
+        <div x-show="tab === 'syslog'">
+          <div class="card mb-3" x-show="!r.syslog.enabled"><div class="card-body text-secondary">The syslog listener is off. Set <code>ARGUS_SYSLOG=1</code> in <code>argus.env</code> and run <code>./argus.sh up</code>.</div></div>
+          <div class="row row-cards" x-show="r.syslog.enabled">
+            <div class="col-lg-5"><div class="card">
+              <div class="card-header"><h3 class="card-title">Senders</h3></div>
+              <div class="table-responsive"><table class="table table-sm card-table"><thead><tr><th>Host</th><th>Address</th><th class="text-end">Messages</th><th>Last</th></tr></thead>
+                <tbody><template x-for="h in r.syslog.hosts" :key="h.host"><tr :title="Object.keys(h.programs || {}).join(', ')"><td x-text="h.host"></td><td class="mono small" x-text="h.src"></td><td class="text-end" x-text="num(h.messages)"></td><td class="small nowrap" x-text="ago(h.last)"></td></tr></template>
+                <tr x-show="!r.syslog.hosts.length"><td colspan="4" class="text-secondary">Nothing received yet.</td></tr></tbody></table></div>
+              <div class="card-body small text-secondary border-top">
+                Point devices at this Mac: UDP <code x-text="syslogHint('udp')"></code>, TCP <code x-text="syslogHint('tcp')"></code> (RFC 3164 / BSD syslog, one message per line).
+                Test from the Mac: <code>./argus.sh syslog-test</code>
+              </div></div></div>
+            <div class="col-lg-7"><div class="card">
+              <div class="card-header"><h3 class="card-title">Recent messages</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table"><tbody>
+                <template x-for="(m, i) in r.syslog.recent" :key="i"><tr><td class="small nowrap" x-text="fmt(m.ts)"></td><td class="small" x-text="m.host"></td><td class="small" x-text="m.prog"></td><td class="small mono" x-text="m.msg"></td></tr></template>
+              </tbody></table></div></div></div>
+          </div>
+        </div>
+
+        <!-- ============================================================ SOURCES -->
+        <div x-show="tab === 'sources'" class="row row-cards">
+          <div class="col-lg-6"><div class="card">
+            <div class="card-header"><h3 class="card-title">Inputs</h3></div>
+            <div class="list-group list-group-flush small">
+              <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">Host collector</strong><span class="badge" :class="collectorFresh() ? 'bg-green-lt' : 'bg-orange-lt'" x-text="collectorFresh() ? 'reporting' : 'stale or not installed'"></span></div>
+                <div class="text-secondary" x-text="'last unified-log batch ' + ago(r.inputs.collector.lastFileAt || (r.inputs.collector.meta.system_last_run ? r.inputs.collector.meta.system_last_run * 1000 : null)) + ' · ' + num(r.inputs.collector.inboxFiles) + ' batches in inbox · ' + num(r.inputs.collector.events) + ' events in the ' + r.inputs.collector.windowHours + ' h window'"></div>
+                <div class="text-secondary" x-show="r.inputs.collector.meta.version" x-text="'collector ' + r.inputs.collector.meta.version + ' · system run ' + ago((r.inputs.collector.meta.system_last_run || 0) * 1000) + ' · user run ' + ago((r.inputs.collector.meta.user_last_run || 0) * 1000)"></div></div>
+              <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">Pi-hole API</strong><span class="badge" :class="!r.inputs.pihole.configured ? 'bg-secondary-lt' : r.inputs.pihole.error ? 'bg-red-lt' : 'bg-green-lt'" x-text="!r.inputs.pihole.configured ? 'not configured' : r.inputs.pihole.error ? 'error' : 'ok'"></span></div>
+                <div class="text-secondary" x-text="r.inputs.pihole.configured ? (r.inputs.pihole.url + ' · polled ' + ago(r.inputs.pihole.lastPoll) + (r.inputs.pihole.error ? ' · ' + r.inputs.pihole.error : '')) : 'Set PIHOLE_URL and PIHOLE_PASSWORD'"></div></div>
+              <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">IntelOwl</strong><span class="badge" :class="r.inputs.intelowl.configured ? 'bg-green-lt' : 'bg-secondary-lt'" x-text="r.inputs.intelowl.configured ? 'configured' : 'not configured'"></span></div>
+                <div class="text-secondary" x-text="r.inputs.intelowl.configured ? r.inputs.intelowl.url + ' · playbook ' + r.inputs.intelowl.playbook + ' (runs on flagged indicators and manual lookups)' : 'Set INTELOWL_URL and INTELOWL_TOKEN'"></div></div>
+              <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">CrowdSec</strong><span class="badge" :class="r.crowdsec.error ? 'bg-red-lt' : 'bg-green-lt'" x-text="r.crowdsec.error ? 'error' : 'ok'"></span></div>
+                <div class="text-secondary" x-text="num(r.crowdsec.decisions) + ' decisions · ' + (r.crowdsec.error || 'stream synced ' + ago(r.crowdsec.lastStream))"></div></div>
+            </div></div></div>
+          <div class="col-lg-6"><div class="card">
+            <div class="card-header"><h3 class="card-title">OSINT providers</h3></div>
+            <div class="table-responsive"><table class="table table-sm card-table"><thead><tr><th>Provider</th><th>Mode</th><th class="text-end">Today</th><th>Status</th></tr></thead>
+              <tbody><template x-for="p in r.providers" :key="p.id"><tr><td><span x-text="p.name"></span> <span class="text-secondary small" x-text="p.types.join('/')"></span></td>
+                <td class="small" x-text="!p.enabled ? 'off (no key)' : p.auto ? (p.minPriority >= 3 ? 'auto: flagged only' : p.minPriority >= 2 ? 'auto: high priority' : 'auto') : 'manual lookups'"></td>
+                <td class="text-end small" x-text="p.callsToday + ' / ' + p.daily"></td><td class="small" :class="p.error && 'text-red'" x-text="p.error ? p.error + ' (' + ago(p.errorAt) + ')' : (p.enabled ? 'ok' : '')"></td></tr></template></tbody></table></div></div></div>
+          <div class="col-12"><div class="card">
+            <div class="card-header"><h3 class="card-title">Threat feeds</h3><div class="card-actions"><button class="btn btn-sm" @click="refreshFeeds()"><i class="ti ti-refresh"></i> Refresh all</button></div></div>
+            <div class="table-responsive"><table class="table table-sm card-table"><thead><tr><th>Feed</th><th>Type</th><th>Severity</th><th class="text-end">Entries</th><th>Updated</th><th>Status</th></tr></thead>
+              <tbody><template x-for="f in r.feeds" :key="f.id"><tr :title="f.info"><td x-text="f.name"></td><td class="small" x-text="f.kind"></td><td><span class="badge" :class="sevBadge(f.severity)" x-text="f.severity"></span></td>
+                <td class="text-end" x-text="num(f.entries)"></td><td class="small nowrap" x-text="ago(f.updated)"></td><td class="small" :class="f.error && 'text-red'" x-text="!f.enabled ? f.why : (f.error || 'ok')"></td></tr></template></tbody></table></div></div></div>
+        </div>
+
+        <!-- ============================================================ THROUGHPUT -->
+        <div x-show="tab === 'throughput'">
+          <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Log flow into Argus</h3><div class="card-actions small text-secondary" x-text="'measured over ' + dur(r.throughput.spanMinutes * 60e3)"></div></div>
+            <div class="table-responsive"><table class="table table-sm card-table">
+              <thead><tr><th>Input</th><th class="text-end">Events (24 h)</th><th class="text-end">Avg events/s</th><th class="text-end">Last 15 min</th><th class="text-end">Bytes (24 h)</th><th class="text-end">Avg rate</th><th class="text-end">Projected / day</th></tr></thead>
+              <tbody><template x-for="s in r.throughput.sources" :key="s.source"><tr><td x-text="tpLabel(s.source)"></td><td class="text-end" x-text="num(s.events)"></td><td class="text-end" x-text="s.eps.toFixed(2)"></td><td class="text-end" x-text="s.eps15.toFixed(2) + '/s'"></td>
+                <td class="text-end" x-text="bytes(s.bytes)"></td><td class="text-end" x-text="rate(s.bps)"></td><td class="text-end" x-text="bytes(s.perDayBytes)"></td></tr></template>
+              <tr x-show="!r.throughput.sources.length"><td colspan="7" class="text-secondary">No data has flowed yet.</td></tr></tbody></table></div>
+            <div class="card-body"><div class="chart-box"><canvas id="ch-tp"></canvas></div></div>
+            <div class="card-footer small text-secondary">
+              "macOS unified log" is the filtered security slice the collector exports (auth, sudo, SSH, TCC, Gatekeeper/XProtect, firewall, login items, faults), not the full unified log.
+              The full default-level log on a Mac playing video is typically 100–500 events/s; this slice is usually under 1 event/s.
+            </div>
+          </div>
+        </div>
+
+        </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- indicator detail -->
+  <div class="modal modal-blur" :class="detail && 'd-block show'" tabindex="-1" x-show="detail" @keydown.escape.window="detail = null" @click.self="detail = null">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable" x-show="detail">
+      <div class="modal-content" x-show="detail">
+        <template x-if="detail">
+          <div>
+          <div class="modal-header">
+            <h5 class="modal-title"><span class="mono" x-text="detail.value"></span> <span class="badge ms-2" :class="riskBadge(detail.risk)" x-text="detail.risk + (detail.risk_score ? ' ' + detail.risk_score : '')"></span></h5>
+            <button type="button" class="btn-close" @click="detail = null"></button>
+          </div>
+          <div class="modal-body">
+            <div class="small text-secondary mb-3" x-text="detail.type + ' · sources: ' + detail.sources.join(', ') + ' · first ' + fmt(detail.first_seen) + ' · last ' + fmt(detail.last_seen) + ' · ' + detail.hits + ' hits'"></div>
+            <div class="small mb-3" x-show="detail.context"><strong>Context:</strong> <span x-text="detail.context"></span></div>
+            <div class="mb-3" x-show="detail.reasons.length"><strong class="small">Why it is flagged</strong>
+              <ul class="small mb-0"><template x-for="x in detail.reasons" :key="x"><li x-text="x"></li></template></ul></div>
+            <div class="mb-3" x-show="detail.crowdsec"><strong class="small">CrowdSec:</strong> <span class="small" x-text="detail.crowdsec ? detail.crowdsec.origin + ' · ' + detail.crowdsec.scenario + ' · ' + detail.crowdsec.type : ''"></span></div>
+            <div class="mb-3" x-show="detail.feedHits.length"><strong class="small">Feed matches</strong>
+              <ul class="small mb-0"><template x-for="f in detail.feedHits" :key="f.feed"><li x-text="f.name + (f.matched !== detail.value ? ' (via ' + f.matched + ')' : '') + (f.label ? ' — ' + f.label : '')"></li></template></ul></div>
+            <table class="table table-sm">
+              <thead><tr><th>Source</th><th>Verdict</th><th>Result</th><th>Checked</th></tr></thead>
+              <tbody>
+                <template x-for="e in detail.enrichments" :key="e.provider"><tr>
+                  <td class="nowrap" x-text="e.name"></td><td><span class="badge" :class="riskBadge(e.verdict)" x-text="e.verdict"></span></td>
+                  <td class="small"><span x-text="e.error || e.summary"></span> <a x-show="e.link" :href="e.link" target="_blank" rel="noopener noreferrer"><i class="ti ti-external-link"></i></a></td>
+                  <td class="small nowrap" x-text="ago(e.fetched_at)"></td></tr></template>
+                <tr x-show="detail.pending && detail.pending.length"><td colspan="4" class="small text-secondary" x-text="'Queued or not yet run: ' + detail.pending.join(', ')"></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="modal-footer">
+            <button class="btn" @click="lookupQ = detail.value; lookup()"><i class="ti ti-search"></i> Re-check all sources</button>
+            <button class="btn btn-primary" @click="detail = null">Close</button>
+          </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade show" x-show="detail"></div>
+</div>
+
+<script>
+const CH = {};
+function argus() {
+  return {
+    r: null, error: '', loading: false, theme: document.documentElement.getAttribute('data-bs-theme') || 'light',
+    tab: 'overview', macTab: 'access', openFinding: null,
+    fSev: ['high', 'medium', 'low'], fArea: '', fQ: '', fLimit: 100,
+    ind: { total: 0, rows: [] }, iRisk: 'flagged', iType: '', iSource: '', iQ: '', iOffset: 0,
+    detail: null, lookupQ: '', lookupBusy: false, lookupErr: '',
+    hideCollector: true, thirdPartyTcc: true, showScans: false,
+    macTabs: [{ id: 'access', label: 'Access' }, { id: 'permissions', label: 'Permissions & Gatekeeper' }, { id: 'persistence', label: 'Persistence' },
+      { id: 'network', label: 'Network' }, { id: 'crashes', label: 'Crashes' }, { id: 'system', label: 'System' }],
+    get tabs() {
+      const r = this.r;
+      return [
+        { id: 'overview', label: 'Overview', icon: 'ti-layout-dashboard' },
+        { id: 'findings', label: 'Findings', icon: 'ti-list-check', badge: () => r && (r.counts.high + r.counts.medium) || '', badgeClass: () => r && r.counts.high ? 'bg-red-lt' : 'bg-orange-lt' },
+        { id: 'indicators', label: 'Indicators', icon: 'ti-fingerprint', badge: () => r && ((r.intel.malicious || 0) + (r.intel.suspicious || 0)) || '', badgeClass: () => r && r.intel.malicious ? 'bg-red-lt' : 'bg-orange-lt' },
+        { id: 'crowdsec', label: 'CrowdSec', icon: 'ti-shield-half', badge: () => r && r.crowdsec.alerts.length || '' },
+        { id: 'macos', label: 'macOS', icon: 'ti-device-laptop' },
+        { id: 'dns', label: 'DNS', icon: 'ti-world-search' },
+        { id: 'syslog', label: 'Syslog', icon: 'ti-server-2', badge: () => r && r.syslog.hosts.length || '' },
+        { id: 'sources', label: 'Sources & feeds', icon: 'ti-plug-connected' },
+        { id: 'throughput', label: 'Throughput', icon: 'ti-activity' },
+      ];
+    },
+    init() {
+      try { const t = localStorage.getItem('argus-tab'); if (t) this.tab = t; } catch (e) {}
+      this.load();
+      setInterval(() => this.load(), 60000);
+      this.$watch('macTab', () => this.$nextTick(() => this.charts()));
+    },
+    async load(fresh) {
+      this.loading = true;
+      try {
+        const res = await fetch('/api/report' + (fresh ? '?fresh=1' : ''));
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        this.r = Object.freeze(await res.json());
+        this.error = '';
+        if (this.tab === 'indicators') this.loadIndicators();
+        this.$nextTick(() => this.charts());
+      } catch (e) { this.error = 'Could not load the report: ' + e.message; }
+      this.loading = false;
+    },
+    setTab(t) {
+      this.tab = t;
+      try { localStorage.setItem('argus-tab', t); } catch (e) {}
+      if (t === 'indicators') this.loadIndicators();
+      this.$nextTick(() => this.charts());
+    },
+    async loadIndicators() {
+      const p = new URLSearchParams({ risk: this.iRisk, type: this.iType, source: this.iSource, q: this.iQ, limit: 200, offset: this.iOffset });
+      try { this.ind = Object.freeze(await (await fetch('/api/indicators?' + p)).json()); } catch (e) { this.error = 'Could not load indicators: ' + e.message; }
+    },
+    async openIndicator(type, value) {
+      try {
+        const res = await fetch('/api/indicators/' + encodeURIComponent(type) + '/' + encodeURIComponent(value));
+        if (res.status === 404) { this.lookupQ = value; return this.lookup(); }
+        this.detail = Object.freeze(await res.json());
+      } catch (e) { this.error = e.message; }
+    },
+    async lookup() {
+      if (!this.lookupQ) return;
+      this.lookupBusy = true; this.lookupErr = '';
+      try {
+        const res = await fetch('/api/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: this.lookupQ }) });
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+        this.detail = Object.freeze(j);
+        if (this.tab === 'indicators') this.loadIndicators();
+      } catch (e) { this.lookupErr = e.message; }
+      this.lookupBusy = false;
+    },
+    async refreshFeeds() { await fetch('/api/feeds/refresh', { method: 'POST' }); setTimeout(() => this.load(true), 15000); },
+    toggleTheme() {
+      this.theme = this.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-bs-theme', this.theme);
+      try { localStorage.setItem('argus-theme', this.theme); } catch (e) {}
+      this.$nextTick(() => this.charts());
+    },
+    toggleSev(s) { this.fSev = this.fSev.includes(s) ? this.fSev.filter(x => x !== s) : [...this.fSev, s]; },
+    areas() { return this.r ? [...new Set(this.r.findings.map(f => f.area))].sort() : []; },
+    filteredFindings() {
+      if (!this.r) return [];
+      const q = this.fQ.toLowerCase();
+      return this.r.findings.filter(f => this.fSev.includes(f.sev) && (!this.fArea || f.area === this.fArea) &&
+        (!q || (f.title + ' ' + f.detail + ' ' + f.evidence.join(' ')).toLowerCase().includes(q)));
+    },
+    remoteAccess() {
+      const a = this.r.macos.access;
+      return [...a.sshEvents.map(e => ({ ...e, svc: 'SSH' })), ...a.screen.map(e => ({ ...e, svc: 'Screen Sharing' }))].sort((x, y) => new Date(y.ts) - new Date(x.ts)).slice(0, 300);
+    },
+    containerRows() {
+      const c = this.r.macos.containers, rows = new Map();
+      for (const x of c.list.rows) rows.set(x.ID, { name: x.ID, state: x.STATE || '', lines: '', errors: '', sample: '' });
+      for (const l of c.logs) { const x = rows.get(l.name) || { name: l.name, state: '' }; Object.assign(x, { lines: l.lines, errors: l.errors, sample: l.samples[l.samples.length - 1] || '' }); rows.set(l.name, x); }
+      return [...rows.values()];
+    },
+    collectorFresh() { const t = this.r.inputs.collector.lastFileAt || ((this.r.inputs.collector.meta.system_last_run || 0) * 1000); return t && Date.now() - t < 20 * 60e3; },
+    syslogHint(p) { return (location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? '<this Mac’s IP>' : location.hostname) + (p === 'udp' ? ':5514' : ':5515'); },
+    tpTotal(k) { return this.r ? this.r.throughput.sources.reduce((a, s) => a + s[k], 0) : 0; },
+    tpRate() { return this.r ? this.r.throughput.sources.reduce((a, s) => a + s.bps, 0) : 0; },
+    tpLabel(s) { return ({ macos: 'macOS unified log (security slice)', 'to-crowdsec': '→ written for CrowdSec', snapshots: 'Host snapshots', syslog: 'Network syslog', pihole: 'Pi-hole queries' })[s] || s; },
+    csv(name, rows) {
+      const blob = new Blob([Papa.unparse(rows)], { type: 'text/csv' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name + '.csv'; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    },
+    // ---- formatting
+    num(n) { return (n === null || n === undefined || n === '') ? '—' : Number(n).toLocaleString(); },
+    bytes(n) { if (!n) return '0 B'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; } return n.toFixed(n >= 100 || i === 0 ? 0 : 1) + ' ' + u[i]; },
+    rate(bps) { return this.bytes(bps) + '/s'; },
+    fmt(d) { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? '—' : x.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); },
+    dur(ms) { const m = Math.round(ms / 60000); return m < 60 ? m + ' min' : m < 2880 ? (m / 60).toFixed(1) + ' h' : (m / 1440).toFixed(1) + ' d'; },
+    ago(d) { if (!d) return 'never'; const t = typeof d === 'number' ? d : Date.parse(d); if (!t) return 'never'; const s = (Date.now() - t) / 1000; if (s < 60) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; if (s < 86400) return Math.round(s / 3600) + ' h ago'; return Math.round(s / 86400) + ' d ago'; },
+    sevBadge(s) { return ({ high: 'bg-red-lt', medium: 'bg-orange-lt', low: 'bg-yellow-lt', info: 'bg-azure-lt' })[s] || 'bg-secondary-lt'; },
+    sevText(s) { return ({ high: 'text-red', medium: 'text-orange', low: 'text-yellow', info: 'text-azure' })[s] || ''; },
+    riskBadge(r) { return ({ malicious: 'bg-red-lt', suspicious: 'bg-orange-lt', clean: 'bg-green-lt', error: 'bg-pink-lt', info: 'bg-azure-lt' })[r] || 'bg-secondary-lt'; },
+    statusIcon(s) { return ({ pass: 'ti-circle-check text-green', fail: 'ti-circle-x text-red', warn: 'ti-alert-triangle text-orange', info: 'ti-info-circle text-azure' })[s] || 'ti-help-circle text-secondary'; },
+    // ---- charts
+    // Resolve a Tabler CSS variable to a concrete rgb() string (canvas cannot use var()).
+    color(name, prop = 'color') {
+      const el = document.createElement('span');
+      el.style[prop] = 'var(--tblr-' + name + ')';
+      document.body.appendChild(el);
+      const c = getComputedStyle(el)[prop];
+      el.remove();
+      return c;
+    },
+    draw(id, config) {
+      const el = document.getElementById(id);
+      if (CH[id]) { CH[id].destroy(); delete CH[id]; }
+      if (!el || !el.offsetParent) return;
+      CH[id] = new Chart(el, config);
+    },
+    charts() {
+      if (!this.r || !window.Chart) return;
+      Chart.defaults.color = this.color('secondary-color');
+      Chart.defaults.borderColor = this.color('border-color', 'borderTopColor') || this.color('border-color');
+      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+      const col = n => this.color(n);
+      const timeLabel = t => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit' });
+      const stackOpts = { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } },
+        scales: { x: { stacked: true, ticks: { maxTicksLimit: 12, autoSkip: true } }, y: { stacked: true, beginAtZero: true } } };
+      if (this.tab === 'overview') {
+        const tl = this.r.timeline;
+        const cats = [['auth', 'Auth & access', 'azure'], ['gatekeeper', 'Gatekeeper / XProtect', 'red'], ['tcc', 'Privacy (TCC)', 'purple'], ['firewall', 'Firewall', 'orange'], ['background', 'Login items', 'teal']];
+        this.draw('ch-timeline', { type: 'bar', data: { labels: tl.map(x => timeLabel(x.t)), datasets: cats.map(([k, l, c]) => ({ label: l, data: tl.map(x => x[k]), backgroundColor: col(c), borderWidth: 0 })) }, options: stackOpts });
+      }
+      if (this.tab === 'throughput') {
+        const tp = this.r.throughput, srcs = tp.sources.map(s => s.source).filter(s => s !== 'to-crowdsec');
+        const firstIdx = tp.series.findIndex(x => srcs.some(s => x[s + ':e']));
+        const series = firstIdx > 0 ? tp.series.slice(Math.max(0, firstIdx - 3)) : tp.series;
+        const palette = ['azure', 'purple', 'teal', 'orange', 'green', 'pink'];
+        this.draw('ch-tp', { type: 'bar', data: { labels: series.map(x => new Date(x.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+          datasets: srcs.map((s, i) => ({ label: this.tpLabel(s) + ' (events / ' + tp.bucketMin + ' min)', data: series.map(x => x[s + ':e'] || 0), backgroundColor: col(palette[i % palette.length]), borderWidth: 0 })) }, options: stackOpts });
+      }
+      if (this.tab === 'dns' && this.r.dns) {
+        const h = this.r.dns.byHour;
+        this.draw('ch-dns', { type: 'bar', data: { labels: h.map(x => timeLabel(x.t)), datasets: [{ label: 'Queries', data: h.map(x => x.n), backgroundColor: col('azure'), borderWidth: 0 }] },
+          options: { ...stackOpts, plugins: { legend: { display: false } } } });
+      }
+      if (this.tab === 'macos' && this.macTab === 'system') {
+        const d = this.r.macos.system.power.days;
+        this.draw('ch-power', { type: 'bar', data: { labels: d.map(x => x.day.slice(5)), datasets: [
+          { label: 'Sleep', data: d.map(x => x.sleep), backgroundColor: col('secondary') }, { label: 'Wake', data: d.map(x => x.wake), backgroundColor: col('azure') }, { label: 'Dark wake', data: d.map(x => x.darkwake), backgroundColor: col('purple') }] },
+          options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } }, scales: { y: { beginAtZero: true } } } });
+      }
+    },
+  };
+}
+</script>
+</body>
+</html>
