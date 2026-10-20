@@ -1,7 +1,11 @@
 # Argus
-Argus is a local log-analysis container for Macs running Apple's `container` runtime. Claude acted as the development agent, with human analysis driving the need. It reads the Mac's own logs (read-only), can take syslog from other devices on your network, and checks everything it collects against CrowdSec, a set of public threat feeds and OSINT lookups, including your own IntelOwl if you run one. The results show up in a dashboard at <http://127.0.0.1:7080>.
+Argus is a local log-analysis container for Macs running Apple's `container` runtime. Claude acted as the development agent, with human analysis driving the need. 
 
-Argus only watches. It doesn't install a bouncer, and it never blocks anything on the Mac.
+It reads the Mac's own logs (read-only), can take syslog from other devices on your network, and checks everything it collects against CrowdSec, a set of public threat feeds and OSINT lookups, including your own IntelOwl if you run one. 
+
+The results show up in a dashboard at <http://127.0.0.1:7080>.
+
+Argus only **watches**. It doesn't install a bouncer, and it never blocks anything on the Mac.
 
 ## How it fits together
 
