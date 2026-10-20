@@ -7,6 +7,18 @@ The results show up in a dashboard at <http://127.0.0.1:7080>.
 
 Argus only **watches**. It doesn't install a bouncer, and it never blocks anything on the Mac.
 
+## What this gives you
+
+One dashboard that answers the questions you'd otherwise dig through `log show` for: who ran sudo, which apps can see your screen, what starts at login, and who your Mac is talking to. Specifically:
+
+- A list of findings ranked by severity, covering things worth a second look like a launch agent running from a temp folder, a first-launch prompt for an unsigned app, failed SSH logins or a new admin account.
+- A quick read on your security posture: SIP, FileVault, firewall, Gatekeeper, automatic updates, and how out of date XProtect is.
+- Reputation checks on the IPs and domains your Mac and your network actually touch, against threat feeds, CrowdSec and OSINT, with newly registered domains from Pi-hole called out.
+- Syslog from your routers, NAS boxes and other hosts in the same place, run through CrowdSec's detection scenarios.
+- JSON and CSV reports every five minutes, ready to grep, diff or feed into something else.
+
+Your logs stay on the Mac. Only the individual IPs and domains being looked up go out, to the providers you've turned on, plus a few keyless lookups (Shodan InternetDB, rdap.org, crt.sh) that are on by default. [SECURITY.md](SECURITY.md) lists every one and how to turn them off.
+
 ## How it fits together
 
 ```mermaid

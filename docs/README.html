@@ -17,8 +17,20 @@
 <div class="page"><div class="page-wrapper"><div class="page-body"><div class="container-xl doc">
 <div class="card"><div class="card-body markdown">
 <h1 id="argus">Argus</h1>
-<p>Argus is a local log-analysis container for Macs running Apple's <code>container</code> runtime. Claude acted as the development agent, with human analysis driving the need. It reads the Mac's own logs (read-only), can take syslog from other devices on your network, and checks everything it collects against CrowdSec, a set of public threat feeds and OSINT lookups, including your own IntelOwl if you run one. The results show up in a dashboard at <a href="http://127.0.0.1:7080">http://127.0.0.1:7080</a>.</p>
-<p>Argus only watches. It doesn't install a bouncer, and it never blocks anything on the Mac.</p>
+<p>Argus is a local log-analysis container for Macs running Apple's <code>container</code> runtime. Claude acted as the development agent, with human analysis driving the need. </p>
+<p>It reads the Mac's own logs (read-only), can take syslog from other devices on your network, and checks everything it collects against CrowdSec, a set of public threat feeds and OSINT lookups, including your own IntelOwl if you run one. </p>
+<p>The results show up in a dashboard at <a href="http://127.0.0.1:7080">http://127.0.0.1:7080</a>.</p>
+<p>Argus only <strong>watches</strong>. It doesn't install a bouncer, and it never blocks anything on the Mac.</p>
+<h2 id="what-this-gives-you">What this gives you</h2>
+<p>One dashboard that answers the questions you'd otherwise dig through <code>log show</code> for: who ran sudo, which apps can see your screen, what starts at login, and who your Mac is talking to. Specifically:</p>
+<ul>
+<li>A list of findings ranked by severity, covering things worth a second look like a launch agent running from a temp folder, a first-launch prompt for an unsigned app, failed SSH logins or a new admin account.</li>
+<li>A quick read on your security posture: SIP, FileVault, firewall, Gatekeeper, automatic updates, and how out of date XProtect is.</li>
+<li>Reputation checks on the IPs and domains your Mac and your network actually touch, against threat feeds, CrowdSec and OSINT, with newly registered domains from Pi-hole called out.</li>
+<li>Syslog from your routers, NAS boxes and other hosts in the same place, run through CrowdSec's detection scenarios.</li>
+<li>JSON and CSV reports every five minutes, ready to grep, diff or feed into something else.</li>
+</ul>
+<p>Your logs stay on the Mac. Only the individual IPs and domains being looked up go out, to the providers you've turned on, plus a few keyless lookups (Shodan InternetDB, rdap.org, crt.sh) that are on by default. <a href="../SECURITY.md">SECURITY.md</a> lists every one and how to turn them off.</p>
 <h2 id="how-it-fits-together">How it fits together</h2>
 <pre class="mermaid">
 flowchart TB
