@@ -151,7 +151,7 @@ flowchart TB
 <tr>
 <td>The script itself running as root</td>
 <td>One short script covers all of the above</td>
-<td>Anyone who could replace the script would get root every 5 minutes. It's <code>root:wheel 0755</code>, so replacing it already takes root</td>
+<td>Anyone who could replace the script, or rename a folder above it, would get root every 5 minutes. The installer refuses to install unless only root can change the script and every folder above it, and <code>status</code> checks again</td>
 </tr>
 </tbody>
 </table>
@@ -186,7 +186,12 @@ flowchart TB
 <li>It doesn't read your documents or anything else in your home folder, apart from listing and printing the plists in each user's <code>~/Library/LaunchAgents</code>.</li>
 <li>It doesn't open the TCC database. Permission changes come from TCC's own log messages.</li>
 </ul>
-<p>The script is installed at <code>/usr/local/libexec/argus/argus-collect.sh</code> as <code>root:wheel</code>, mode <code>0755</code>, so your own account can't edit what root runs. The LaunchDaemon plist is root-owned too.</p>
+<p>The script is installed at <code>/usr/local/libexec/argus/argus-collect.sh</code> as <code>root:wheel</code>, mode <code>0755</code>, with any ACLs stripped, and the LaunchDaemon plist is root-owned too. Owning the file isn't enough on its own, though. Anyone who can write to a folder above it can rename the script and drop in their own, and root would run that instead. Folders under <code>/usr/local</code> are root-owned on a stock Mac, but Homebrew on Intel Macs and some other installers hand parts of it to your account.</p>
+<p>So <code>install-collector</code> checks every folder from <code>/</code> down to the script and refuses to install if any of them could be changed by an account other than root. It tells you which folder is the problem and how to fix it. <code>./argus.sh status</code> runs the same check again and also warns you when:</p>
+<ul>
+<li>the installed script is older than the one in the repo, because a <code>git pull</code> updates the repo copy, not the one root runs (re-run <code>install-collector</code> after pulling)</li>
+<li>the root job hasn't run for more than 15 minutes, which usually means it was switched off under System Settings &gt; General &gt; Login Items &amp; Extensions</li>
+</ul>
 <p>The inbox folder itself is owned by root with mode <code>0700</code>, plus one access control entry that lets the account that installed the collector list and enter it. That's the account the container reads through, so Argus keeps working, while other accounts on the Mac are stopped at the folder and can't read anything inside. The root job re-applies this lock on every run, so if something loosens it, it's back within five minutes. The job's own bookkeeping folder (<code>.state</code>) is root-only.</p>
 <h3 id="the-user-job">The user job</h3>
 <p><code>com.argus.collect.user</code> is a LaunchAgent that runs as you every 15 minutes. It refuses to run as root. It saves:</p>
@@ -603,6 +608,7 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 <li><strong>Other containers can reach the ports.</strong> The ports are only on loopback from the Mac's side. Inside the container they accept connections on every interface, so other containers on the same Apple <code>container</code> network can reach them at the Argus container's address. The dashboard still needs the token, but the syslog listener has no such protection.</li>
 <li><strong>Syslog can be spoofed.</strong> Even on loopback, any process on the Mac can send fake syslog lines to the listener.</li>
 <li><strong>Base images and dashboard libraries float</strong> until you pin them as described above.</li>
+<li><strong>The collector depends on <code>/bin/bash</code>.</strong> It runs under the bash 3.2 that macOS still ships. Apple made zsh the default shell years ago, so if a future macOS drops bash, the collector will stop until it's ported. <code>./argus.sh status</code> will show it as not running.</li>
 </ul>
 <h2 id="security">Security</h2>
 <p><a href="../SECURITY.md">SECURITY.md</a> covers the trust model: what the container can and can't touch, which indicator data leaves the Mac and which providers receive it, how secrets are handled, and notes on the supply chain. <code>sbom.json</code> is a CycloneDX bill of materials for the npm dependencies, Docker base images, Alpine packages and the dashboard libraries loaded from a CDN. <a href="sbom.md">docs/sbom.md</a> has the same information in plain Markdown.</p>

@@ -99,6 +99,45 @@ container_ip() { # first IPv4 of a container
 }
 host_tz() { readlink /etc/localtime 2>/dev/null | sed 's#.*/zoneinfo/##'; }
 
+# Root runs the collector scripts, so nobody but root may be able to change them: not
+# the files, and not any directory on the way to them, because whoever can write a
+# directory can rename what's in it and drop in a replacement. Checks every path
+# component for a non-root owner, group/other write bits (group wheel is allowed) and
+# ACL entries that allow changes. Prints each problem; returns 1 if there are any.
+root_only_path() { # PATH
+  local p="$1" bad=0 owner group perm m acl
+  while :; do
+    if [ -e "$p" ] || [ -L "$p" ]; then
+      read -r owner group perm <<<"$(stat -f '%Su %Sg %Lp' "$p" 2>/dev/null)"
+      m=$((8#${perm:-0}))
+      [ "$owner" = root ] || { echo "$p is owned by ${owner:-unknown}, not root"; bad=1; }
+      [ $((m & 2)) -eq 0 ] || { echo "$p is writable by every account"; bad=1; }
+      if [ $((m & 16)) -ne 0 ] && [ "$group" != wheel ]; then echo "$p is writable by group $group"; bad=1; fi
+      acl="$(ls -led "$p" 2>/dev/null | sed 1d | grep -E ' allow .*(write|append|add_file|add_subdirectory|delete_child|chown)' || true)"
+      [ -z "$acl" ] || { echo "$p has an ACL that allows changes:$(printf ' %s' $acl)"; bad=1; }
+    fi
+    [ "$p" = / ] && break
+    p="$(dirname "$p")"
+  done
+  return "$bad"
+}
+
+# Install one collector script to $LIBEXEC, then refuse to go on unless root alone can
+# change it. On failure, stop any job already pointing at it so root never runs it.
+install_root_script() { # SRC NAME LABEL...
+  local src="$1" name="$2" problems lbl; shift 2
+  sudo mkdir -p "$LIBEXEC"
+  sudo chown root:wheel "$LIBEXEC"; sudo chmod 0755 "$LIBEXEC"
+  sudo install -o root -g wheel -m 0755 "$src" "$LIBEXEC/$name"
+  sudo chmod -N "$LIBEXEC" "$LIBEXEC/$name" 2>/dev/null || true
+  if ! problems="$(root_only_path "$LIBEXEC/$name")"; then
+    for lbl in "$@"; do sudo launchctl bootout "system/$lbl" >/dev/null 2>&1 || true; done
+    printf '%s\n' "$problems" | sed 's/^/    /' >&2
+    die "$LIBEXEC/$name could be replaced by a non-root account (above), so it won't be run as root. Fix the listed folders (sudo chown root:wheel <dir> && sudo chmod go-w <dir> && sudo chmod -N <dir>) and run this again."
+  fi
+  ok "$LIBEXEC/$name: only root can change it or any folder above it"
+}
+
 # ------------------------------------------------------------------ commands
 # Ask for one setting. Secrets are read without echo. Enter keeps the current value
 # (or skips if there isn't one); a single "-" clears it.
@@ -321,8 +360,25 @@ cmd_status() {
     ok "collector daemon installed ($(sudo -n launchctl print "system/$DAEMON_LABEL" 2>/dev/null | awk -F'= ' '/last exit code/ {print "last exit " $2; exit}' || echo 'status needs sudo'))"
   else warn "collector daemon not installed"; fi
   if [ -f "$AGENT_PLIST" ]; then ok "collector agent installed"; else warn "collector agent not installed"; fi
-  local inbox; inbox="$(env_val ARGUS_INBOX /Users/Shared/Argus/inbox)"
+  local inbox last age have want problems
+  inbox="$(env_val ARGUS_INBOX /Users/Shared/Argus/inbox)"
   [ -f "$inbox/meta.json" ] && echo "    inbox: $(cat "$inbox/meta.json")"
+  if [ -f "$DAEMON_PLIST" ]; then
+    # a git pull updates the repo copy, not the one root runs
+    have="$(/bin/bash "$LIBEXEC/argus-collect.sh" version 2>/dev/null || true)"
+    want="$(/bin/bash "$REPO/collector/argus-collect.sh" version 2>/dev/null || true)"
+    if [ -n "$want" ] && [ "$have" != "$want" ]; then
+      warn "installed collector is ${have:-missing}, this repo has $want: run ./argus.sh install-collector"
+    fi
+    if problems="$(root_only_path "$LIBEXEC/argus-collect.sh")"; then ok "collector path is root-only"
+    else printf '%s\n' "$problems" | sed 's/^/    /' >&2; warn "the collector could be replaced by a non-root account: see above"; fi
+    # macOS lets you switch background jobs off under Login Items without uninstalling them
+    last="$(sed -n 's/.*"system_last_run":\([0-9]*\).*/\1/p' "$inbox/meta.json" 2>/dev/null)"
+    if [ -n "$last" ]; then
+      age=$(( $(date +%s) - last ))
+      [ "$age" -le 900 ] || warn "the root collector last ran $((age / 60)) min ago. Is it switched off in System Settings > General > Login Items & Extensions?"
+    fi
+  fi
 }
 
 cmd_install_collector() {
@@ -331,8 +387,7 @@ cmd_install_collector() {
   inbox="$(env_val ARGUS_INBOX /Users/Shared/Argus/inbox)"
   me="$(id -un)"; uid="$(id -u)"
   log "installing collector to $LIBEXEC (root-owned)"
-  sudo mkdir -p "$LIBEXEC"
-  sudo install -o root -g wheel -m 0755 "$REPO/collector/argus-collect.sh" "$LIBEXEC/argus-collect.sh"
+  install_root_script "$REPO/collector/argus-collect.sh" argus-collect.sh "$DAEMON_LABEL"
 
   log "preparing inbox $inbox"
   sudo mkdir -p "$inbox/unified" "$inbox/snapshots" "$inbox/crash" "$inbox/.state" "$inbox/user" "$inbox/containers" "$inbox/apps"
@@ -432,8 +487,7 @@ stream_on() {
   [ "$mode" = "all" ] && warn "ARGUS_STREAM_MODE=all ships the whole unified log: hundreds of events/s, gigabytes per day"
 
   log "unified log ($mode) -> $dest:$tcp/tcp via LaunchDaemon $STREAM_LABEL"
-  sudo mkdir -p "$LIBEXEC"
-  sudo install -o root -g wheel -m 0755 "$REPO/collector/argus-logstream.sh" "$LIBEXEC/argus-logstream.sh"
+  install_root_script "$REPO/collector/argus-logstream.sh" argus-logstream.sh "$STREAM_LABEL"
   sudo tee "$STREAM_PLIST" >/dev/null <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

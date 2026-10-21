@@ -33,8 +33,11 @@ installed, so its decisions never reach the Mac's actual network stack.
 a root `LaunchDaemon`. A root-run script must never live somewhere your own
 account (or an app running as you) can edit — that's why the installer places
 it outside your home directory and `chmod`s it so only root can write to it.
-If you ever see those collector scripts become group- or world-writable,
-something is wrong; reinstall with `./argus.sh install-collector`.
+Owning the file isn't enough: anyone who can write to a folder above it can
+swap it out. `./argus.sh install-collector` checks every folder from `/` down
+to the script and refuses to install if a non-root account could change any of
+them, and `./argus.sh status` repeats that check. If it ever fails, fix the
+folders it lists and reinstall with `./argus.sh install-collector`.
 
 The unified log itself cannot be parsed by a Linux container (it's a binary
 store only macOS's own `log` tool understands), which is the entire reason

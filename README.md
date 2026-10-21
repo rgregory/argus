@@ -93,7 +93,7 @@ Most of the collector would work fine as your own user. This is what root adds, 
 | Crash reports only root can read | Crashes in system daemons, which can point to exploit attempts or a misbehaving extension | Reports can include usernames, file paths and process details, and become readable by your account |
 | `profiles list` for the whole Mac | Shows configuration and MDM profiles installed device-wide, not just yours | Low: profile names and identifiers only |
 | Running as a LaunchDaemon | Keeps collecting at the login window, straight after a reboot, and while you're logged out | A root process runs every 5 minutes whether you're there or not |
-| The script itself running as root | One short script covers all of the above | Anyone who could replace the script would get root every 5 minutes. It's `root:wheel 0755`, so replacing it already takes root |
+| The script itself running as root | One short script covers all of the above | Anyone who could replace the script, or rename a folder above it, would get root every 5 minutes. The installer refuses to install unless only root can change the script and every folder above it, and `status` checks again |
 
 Most of the risk column comes down to one thing: root gathers information that your account normally can't see, and puts it where your account can. The inbox folder is locked to root and the account that installed the collector, so other users on the Mac can't open it. What's left is that any program running as you can read it too. If something malicious is already running as you, that hands it a convenient map of the system.
 
@@ -130,7 +130,12 @@ Housekeeping:
 - It doesn't read your documents or anything else in your home folder, apart from listing and printing the plists in each user's `~/Library/LaunchAgents`.
 - It doesn't open the TCC database. Permission changes come from TCC's own log messages.
 
-The script is installed at `/usr/local/libexec/argus/argus-collect.sh` as `root:wheel`, mode `0755`, so your own account can't edit what root runs. The LaunchDaemon plist is root-owned too.
+The script is installed at `/usr/local/libexec/argus/argus-collect.sh` as `root:wheel`, mode `0755`, with any ACLs stripped, and the LaunchDaemon plist is root-owned too. Owning the file isn't enough on its own, though. Anyone who can write to a folder above it can rename the script and drop in their own, and root would run that instead. Folders under `/usr/local` are root-owned on a stock Mac, but Homebrew on Intel Macs and some other installers hand parts of it to your account.
+
+So `install-collector` checks every folder from `/` down to the script and refuses to install if any of them could be changed by an account other than root. It tells you which folder is the problem and how to fix it. `./argus.sh status` runs the same check again and also warns you when:
+
+- the installed script is older than the one in the repo, because a `git pull` updates the repo copy, not the one root runs (re-run `install-collector` after pulling)
+- the root job hasn't run for more than 15 minutes, which usually means it was switched off under System Settings > General > Login Items & Extensions
 
 The inbox folder itself is owned by root with mode `0700`, plus one access control entry that lets the account that installed the collector list and enter it. That's the account the container reads through, so Argus keeps working, while other accounts on the Mac are stopped at the folder and can't read anything inside. The root job re-applies this lock on every run, so if something loosens it, it's back within five minutes. The job's own bookkeeping folder (`.state`) is root-only.
 
@@ -435,6 +440,7 @@ Divide the line count by 600 to get events per second. The dashboard's Throughpu
 - **Other containers can reach the ports.** The ports are only on loopback from the Mac's side. Inside the container they accept connections on every interface, so other containers on the same Apple `container` network can reach them at the Argus container's address. The dashboard still needs the token, but the syslog listener has no such protection.
 - **Syslog can be spoofed.** Even on loopback, any process on the Mac can send fake syslog lines to the listener.
 - **Base images and dashboard libraries float** until you pin them as described above.
+- **The collector depends on `/bin/bash`.** It runs under the bash 3.2 that macOS still ships. Apple made zsh the default shell years ago, so if a future macOS drops bash, the collector will stop until it's ported. `./argus.sh status` will show it as not running.
 
 ## Security
 
