@@ -2,6 +2,7 @@
 # =============================================================================
 # argus.sh — build and run the Argus log-analysis container on Apple's
 # `container` runtime, and install the host collector.
+# Step-by-step install guide: docs/INSTALL.md
 #
 #   ./argus.sh init [--no-prompt]   create $ARGUS_HOME (default ~/.argus), config, keys; asks for credentials
 #   ./argus.sh build                build the image (argus:latest); fixes builder DNS if needed
@@ -208,7 +209,8 @@ cmd_init() {
   if exists "$NAME" 2>/dev/null; then
     echo "    Argus is already installed: ./argus.sh restart to apply"
   else
-    echo "    next: ./argus.sh build && ./argus.sh install-collector && ./argus.sh up"
+    echo "    next: ./argus.sh build && ./argus.sh install-collector && ./argus.sh up && ./argus.sh open"
+    echo "    full guide: docs/INSTALL.md"
   fi
 }
 

@@ -7,6 +7,8 @@ The results show up in a dashboard at <http://127.0.0.1:7080>.
 
 Argus only **watches**. It doesn't install a bouncer, and it never blocks anything on the Mac.
 
+To get it running, see [Install](#install) for the short version or [docs/INSTALL.md](docs/INSTALL.md) for the full guide.
+
 ## What this gives you
 
 One dashboard that answers the questions you'd otherwise dig through `log show` for: who ran sudo, which apps can see your screen, what starts at login, and who your Mac is talking to. Specifically:

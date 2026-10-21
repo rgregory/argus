@@ -38,6 +38,8 @@ swap it out. `./argus.sh install-collector` checks every folder from `/` down
 to the script and refuses to install if a non-root account could change any of
 them, and `./argus.sh status` repeats that check. If it ever fails, fix the
 folders it lists and reinstall with `./argus.sh install-collector`.
+[docs/INSTALL.md](docs/INSTALL.md) describes each install step and what it
+changes on the Mac.
 
 The unified log itself cannot be parsed by a Linux container (it's a binary
 store only macOS's own `log` tool understands), which is the entire reason
@@ -154,4 +156,5 @@ request that demonstrates it live.
   Host names, which blocks DNS rebinding. POST requests from another origin
   are refused. Anyone holding the token can read everything Argus knows, so
   treat it like a password. If `ARGUS_TOKEN` is blank, anything on the Mac can
-  read the dashboard. See "Security hardening" in the README.
+  read the dashboard. See [Security hardening](README.md#security-hardening)
+  in the README.
