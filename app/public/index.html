@@ -221,6 +221,21 @@
   .dos-when { color: var(--muted); font-size: .8rem; white-space: nowrap; }
   body.dos-open { overflow: hidden; }
   .dos .ed-list { border-top: 0; }
+  /* program cells: name first, path below, truncated from the left so the file name stays visible */
+  .ed-prog { min-width: 13rem; max-width: 24rem; }
+  .ed-prog-name { font-family: 'Fraunces', Georgia, serif; font-weight: 600; color: var(--ink); text-decoration: none; display: block; line-height: 1.2; }
+  .ed-prog-name:hover { text-decoration: underline; color: var(--ink); }
+  .ed-prog-path { font-family: var(--tblr-font-monospace); font-size: .72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; max-width: 24rem; }
+  .ed-prog-path bdi { direction: ltr; unicode-bidi: isolate; }
+  .ed-hosts { max-width: 26rem; }
+  .ed-hosts a { display: inline-block; margin: 0 .7rem .1rem 0; white-space: nowrap; }
+  /* flagged table rows: tinted paper, readable in both themes */
+  .table-danger, .table-warning, .table-info, .table-success { --tblr-table-color: var(--ink) !important; --tblr-table-border-color: var(--rule) !important; --tblr-table-striped-color: var(--ink) !important; --tblr-table-hover-color: var(--ink) !important; }
+  .table-danger { --tblr-table-bg: color-mix(in srgb, var(--sev-high) 13%, var(--paper-2)) !important; --tblr-table-hover-bg: color-mix(in srgb, var(--sev-high) 18%, var(--paper-2)) !important; }
+  .table-warning { --tblr-table-bg: color-mix(in srgb, var(--sev-medium) 13%, var(--paper-2)) !important; --tblr-table-hover-bg: color-mix(in srgb, var(--sev-medium) 18%, var(--paper-2)) !important; }
+  .table-info { --tblr-table-bg: color-mix(in srgb, var(--sev-info) 12%, var(--paper-2)) !important; }
+  .table-success { --tblr-table-bg: color-mix(in srgb, var(--ok) 12%, var(--paper-2)) !important; }
+  .table-danger > td, .table-warning > td, .table-info > td, .table-success > td { color: var(--ink); }
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
@@ -812,7 +827,7 @@
               <div class="table-responsive table-wrap"><table class="table table-sm card-table">
                 <thead><tr><th>First run</th><th>Program</th><th>Signer</th><th>Parent</th></tr></thead>
                 <tbody>
-                  <template x-for="(b, i) in (r.hostsec.es.newBinaries || [])" :key="i"><tr><td class="small nowrap" x-text="fmt(b.first_seen)"></td><td class="small mono text-break"><a href="#" class="ed-plink" @click.prevent="openDossier(b.path)" x-text="b.path"></a></td>
+                  <template x-for="(b, i) in (r.hostsec.es.newBinaries || [])" :key="i"><tr><td class="small nowrap" x-text="fmt(b.first_seen)"></td><td class="ed-prog"><a href="#" class="ed-prog-name" @click.prevent="openDossier(b.path)" x-text="progName(b.path)"></a><div class="ed-prog-path" :title="b.path"><bdi x-text="b.path"></bdi></div></td>
                     <td class="small"><span class="badge" :class="b.team ? 'bg-green-lt' : 'bg-orange-lt'" x-text="b.team || (b.adhoc ? 'ad-hoc' : 'no Team ID')"></span></td><td class="small mono text-break" x-text="b.last_parent"></td></tr></template>
                   <tr x-show="!(r.hostsec.es.newBinaries || []).length"><td colspan="4" class="text-secondary" x-text="r.hostsec.es.baselineDone ? 'None in the window.' : 'Learning what normally runs here (first 24 h).'"></td></tr>
                 </tbody></table></div></div></div>
@@ -820,7 +835,7 @@
               <div class="card-header"><h3 class="card-title">Most-run third-party programs</h3></div>
               <div class="table-responsive table-wrap"><table class="table table-sm card-table">
                 <thead><tr><th>Program</th><th>Signer</th><th class="text-end">Runs</th><th>Last</th></tr></thead>
-                <tbody><template x-for="(b, i) in (r.hostsec.es.topThirdParty || []).slice(0, 150)" :key="i"><tr><td class="small mono text-break"><a href="#" class="ed-plink" @click.prevent="openDossier(b.path)" x-text="b.path"></a></td>
+                <tbody><template x-for="(b, i) in (r.hostsec.es.topThirdParty || []).slice(0, 150)" :key="i"><tr><td class="ed-prog"><a href="#" class="ed-prog-name" @click.prevent="openDossier(b.path)" x-text="progName(b.path)"></a><div class="ed-prog-path" :title="b.path"><bdi x-text="b.path"></bdi></div></td>
                   <td class="small" x-text="b.team || (b.adhoc ? 'ad-hoc' : 'no Team ID')"></td><td class="text-end" x-text="num(b.count)"></td><td class="small nowrap" x-text="ago(b.last_seen)"></td></tr></template></tbody></table></div></div></div>
 
             <div class="col-lg-6"><div class="card">
@@ -849,8 +864,8 @@
               <div class="table-responsive table-wrap"><table class="table table-sm card-table">
                 <thead><tr><th>Program</th><th>Destinations</th><th class="text-end">Remotes</th><th class="text-end">Conns</th><th class="text-end">Denied</th><th class="text-end">Sent</th><th class="text-end">Received</th><th>Last</th></tr></thead>
                 <tbody><template x-for="(p, i) in ((r.hostsec.littlesnitch && r.hostsec.littlesnitch.programs) || []).slice(0, 200)" :key="i"><tr>
-                  <td class="small mono text-break"><a href="#" class="ed-plink" @click.prevent="openDossier(p.path)" x-text="p.path"></a></td>
-                  <td class="small"><template x-for="(h, j) in p.hosts" :key="j"><a href="#" class="me-2" @click.prevent="openIndicator('domain', h)" x-text="h"></a></template></td>
+                  <td class="ed-prog"><a href="#" class="ed-prog-name" @click.prevent="openDossier(p.path)" x-text="progName(p.path)"></a><div class="ed-prog-path" :title="p.path"><bdi x-text="p.path"></bdi></div></td>
+                  <td class="small ed-hosts"><template x-for="(h, j) in p.hosts.slice(0, 4)" :key="j"><a href="#" @click.prevent="openIndicator('domain', h)" x-text="h"></a></template><span class="text-secondary" x-show="p.hosts.length > 4" x-text="'+' + (p.hosts.length - 4)"></span></td>
                   <td class="text-end" x-text="num(p.remotes)"></td><td class="text-end" x-text="num(p.connects)"></td><td class="text-end" :class="p.denies && 'text-orange'" x-text="num(p.denies)"></td>
                   <td class="text-end nowrap" x-text="bytes(p.bytes_out)"></td><td class="text-end nowrap" x-text="bytes(p.bytes_in)"></td><td class="small nowrap" x-text="ago(p.last)"></td></tr></template></tbody></table></div></div></div>
 
@@ -891,10 +906,10 @@
                 <thead><tr><th>Program</th><th>Signer</th><th class="text-end">Remotes</th><th>Ports</th><th>Sample</th><th>Last</th></tr></thead>
                 <tbody>
                   <template x-for="(p, i) in ((r.hostsec.net && r.hostsec.net.programs) || []).slice(0, 200)" :key="i"><tr :class="p.flagged && 'table-danger'">
-                    <td class="small mono text-break"><a href="#" class="ed-plink" @click.prevent="openDossier(p.path)" x-text="p.path"></a></td>
+                    <td class="ed-prog"><a href="#" class="ed-prog-name" @click.prevent="openDossier(p.path)" x-text="progName(p.path)"></a><div class="ed-prog-path" :title="p.path"><bdi x-text="p.path"></bdi></div></td>
                     <td class="small"><span class="badge" :class="p.platform ? 'bg-secondary-lt' : p.team ? 'bg-green-lt' : p.known ? 'bg-orange-lt' : 'bg-secondary-lt'" x-text="p.platform ? 'Apple' : p.team || (p.known ? (p.adhoc ? 'ad-hoc' : 'no Team ID') : '?')"></span></td>
                     <td class="text-end" x-text="p.remotes"></td><td class="small" x-text="p.ports.join(', ')"></td>
-                    <td class="small mono"><template x-for="(ip, j) in p.sample" :key="j"><a href="#" class="me-2" @click.prevent="openIndicator('ip', ip)" x-text="ip"></a></template></td>
+                    <td class="small mono ed-hosts"><template x-for="(ip, j) in p.sample" :key="j"><a href="#" @click.prevent="openIndicator('ip', ip)" x-text="ip"></a></template></td>
                     <td class="small nowrap" x-text="ago(p.last)"></td></tr></template>
                   <tr x-show="!((r.hostsec.net && r.hostsec.net.programs) || []).length"><td colspan="6" class="text-secondary">No public connections recorded yet.</td></tr>
                 </tbody></table></div></div></div>
@@ -1838,6 +1853,13 @@ function argus() {
       const s = this.sg.status, hit = this.sg.rules.filter(g => g.hits).length;
       if (!s.enabled) return 'Sigma is switched off (<code>ARGUS_SIGMA=0</code>).';
       return `<b>${s.rules}</b> rules active${s.local ? ` (${s.local} local)` : ''}${s.muted ? `, <b>${s.muted}</b> muted` : ''}, ${s.skipped} not loaded. <b>${hit}</b> ${hit === 1 ? 'rule has' : 'rules have'} matched${this.sg.since ? ' since ' + this.fmt(this.sg.since) : ''}. SigmaHQ rules refreshed ${this.ago(s.updated)}${s.error ? ` · <span class="text-red">${this.esc(s.error)}</span>` : ''}. Muting a rule stops new matches and hides its existing ones from the findings.`;
+    },
+    progName(p) {
+      p = String(p || '');
+      const apps = [...p.matchAll(/([^/]+)\.app\//g)].map(m => m[1]), base = p.split('/').pop();
+      if (!apps.length) return base;
+      const inner = apps[apps.length - 1] !== apps[0] ? apps[apps.length - 1] : (base !== apps[0] ? base : '');
+      return inner ? `${apps[0]} · ${inner}` : apps[0];
     },
     async ackFinding(f, undo) {
       this.ackBusy = true;
