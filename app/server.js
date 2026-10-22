@@ -61,6 +61,7 @@ function buildReport() {
     syslog: syslog.status(),
     inputs: { collector: mac.status(), pihole: pihole.status(), intelowl: { configured: !!(cfg.intelowl.url && cfg.intelowl.token), url: cfg.intelowl.publicUrl || cfg.intelowl.url, playbook: cfg.intelowl.playbook } },
     throughput: tp.summary(24, 10),
+    hostsec: m.hostsec || null, vulns: m.vulns || null,
   };
   reportAt = Date.now();
   return report;
@@ -98,7 +99,14 @@ async function main() {
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '1mb' }));
-  app.use((req, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); res.set('Referrer-Policy', 'no-referrer'); next(); });
+  app.use((req, res, next) => {
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Referrer-Policy', 'no-referrer');
+    // nothing about Argus needs to be framed; refuse it so another page can't overlay the dashboard
+    res.set('X-Frame-Options', 'DENY');
+    res.set('Content-Security-Policy', "frame-ancestors 'none'");
+    next();
+  });
 
   // ---- access control -----------------------------------------------------
   // 1. Host check. Only localhost names are answered, which defeats DNS rebinding: a web
@@ -154,7 +162,9 @@ async function main() {
     if (q) {
       if (!tokenOk(q)) return res.status(401).type('html').send(UNAUTH);
       res.set('Set-Cookie', `argus_token=${encodeURIComponent(q)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=7776000`);
-      return res.redirect(302, req.path);
+      // Always land on the dashboard home: echoing req.path back allowed //host and /\\host,
+      // which browsers follow off-site (an open redirect for anyone holding the token).
+      return res.redirect(302, '/');
     }
     const auth = String(req.headers.authorization || '');
     if (tokenOk(auth.startsWith('Bearer ') ? auth.slice(7).trim() : cookieVal(req, 'argus_token'))) return next();
@@ -177,6 +187,10 @@ async function main() {
   });
   app.post('/api/feeds/refresh', async (req, res) => {
     feeds.refresh(true).then(() => log.info('manual feed refresh done')).catch(e => log.warn(e.message));
+    res.json({ ok: true, message: 'refresh started' });
+  });
+  app.post('/api/vulns/refresh', async (req, res) => {
+    mac.vulns.refresh(true).then(() => { mac.dirty = true; log.info('manual vulnerability-data refresh done'); }).catch(e => log.warn(e.message));
     res.json({ ok: true, message: 'refresh started' });
   });
   app.post('/api/rescan', async (req, res) => { mac.lastRebuild = 0; await mac.cycle(); buildReport(); res.json({ ok: true }); });

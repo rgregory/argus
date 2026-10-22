@@ -30,12 +30,49 @@ function defaultFeeds() {
       url: 'https://openphish.com/feed.txt', info: 'Active phishing URLs (hosts are matched exactly).' },
     { id: 'urlhaus', name: 'abuse.ch URLhaus (online)', kind: 'domain', format: 'url', severity: 'high', ttl: 1 * H, needsKey: 'abusech',
       url: 'https://urlhaus.abuse.ch/downloads/text_online/', abusech: true, info: 'Malware distribution URLs that are currently online.' },
+    ...cfg.feeds.nrd.filter(n => !/^(none|off)$/i.test(n)).map(n => ({ id: 'hagezi_' + n.replace(/[^a-z0-9]/gi, '_'), name: `HaGeZi newly registered domains (${n})`, kind: 'domain', format: 'domains-hashed', severity: 'low', ttl: 24 * H,
+      url: `https://cdn.jsdelivr.net/gh/hagezi/nrd@latest/domains/${n}.txt`, info: 'Every domain registered in this window (millions; hashed in memory). NRDs are favoured for phishing and C2 — a hit alone is a weak signal.' })),
+    { id: 'hagezi_dga14', name: 'HaGeZi NRD — high-entropy / DGA (14 days)', kind: 'domain', format: 'domains-hashed', severity: 'medium', ttl: 24 * H,
+      url: 'https://cdn.jsdelivr.net/gh/hagezi/nrd@latest/domains/dga14.txt', info: 'Newly registered domains with random-looking names typical of malware domain-generation algorithms.' },
+    { id: 'tor_exit', name: 'Tor exit nodes', kind: 'ip', format: 'plain', severity: 'low', ttl: 6 * H,
+      url: 'https://check.torproject.org/torbulkexitlist', info: 'Current Tor exit relays. Not malicious by itself; inbound logins from Tor deserve a look.' },
+    { id: 'dshield_block', name: 'DShield top attacking /24s', kind: 'ip', format: 'dshield', severity: 'medium', ttl: 12 * H,
+      url: 'https://feeds.dshield.org/block.txt', info: 'SANS Internet Storm Center: the 20 netblocks attacking the most sensors in the last 3 days.' },
     { id: 'threatfox', name: 'abuse.ch ThreatFox (7 days)', kind: 'mixed', format: 'threatfox', severity: 'high', ttl: 6 * H, needsKey: 'abusech',
       url: 'https://threatfox-api.abuse.ch/api/v1/', abusech: true, info: 'IOCs (C2 IPs, domains, URLs) tagged with malware family.' },
   ];
 }
 
-function emptyIndex() { return { ips: new Set(), ranges: [], domains: new Set(), wildcard: false, labels: new Map(), count: 0 }; }
+function emptyIndex() { return { ips: new Set(), ranges: [], domains: new Set(), hashed: null, wildcard: false, labels: new Map(), count: 0 }; }
+
+// Multi-million-entry domain lists (NRD) are kept as sorted 53-bit hashes:
+// ~8 bytes per domain instead of ~80 for a Set of strings.
+function hash53(s) {
+  let h1 = 0x811c9dc5, h2 = 5381;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0; h2 = (Math.imul(h2, 33) + c) >>> 0; }
+  return h1 * 2097152 + (h2 & 0x1fffff);
+}
+function hashedHas(arr, s) {
+  const h = hash53(s); let lo = 0, hi = arr.length - 1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; const v = arr[mid]; if (v === h) return true; if (v < h) lo = mid + 1; else hi = mid - 1; }
+  return false;
+}
+function parseHashed(text) {
+  let arr = new Float64Array(1 << 20), n = 0, start = 0;
+  const len = text.length;
+  while (start < len) {
+    let nl = text.indexOf('\n', start); if (nl === -1) nl = len;
+    let line = text.slice(start, nl).trim().toLowerCase(); start = nl + 1;
+    if (!line || line[0] === '#' || line[0] === '!') continue;
+    line = line.replace(/^\|\||\^$/g, '').replace(/^\*\./, '').replace(/\.$/, '');
+    if (!line.includes('.')) continue;
+    if (n === arr.length) { const b = new Float64Array(arr.length * 2); b.set(arr); arr = b; }
+    arr[n++] = hash53(line);
+  }
+  const out = arr.slice(0, n).sort();
+  const idx = emptyIndex(); idx.hashed = out; idx.count = n; idx.wildcard = true;
+  return idx;
+}
 
 function addToken(idx, tok, label) {
   tok = String(tok || '').trim().toLowerCase();
@@ -50,6 +87,7 @@ function hostOf(u) {
 }
 
 function parseFeed(def, text) {
+  if (def.format === 'domains-hashed') return parseHashed(text);
   const idx = emptyIndex();
   idx.wildcard = def.format === 'wildcard';
   if (def.format === 'threatfox') {
@@ -60,6 +98,11 @@ function parseFeed(def, text) {
       if (/^ip/.test(x.ioc_type)) addToken(idx, String(x.ioc).replace(/:\d+$/, ''), label);
       else if (x.ioc_type === 'domain') addToken(idx, x.ioc, label);
       else if (x.ioc_type === 'url') addToken(idx, hostOf(x.ioc), label);
+    }
+  } else if (def.format === 'dshield') {
+    for (const line of text.split('\n')) {
+      const f = line.replace(/#.*$/, '').trim().split(/\s+/);
+      if (f.length >= 3 && ipv4ToInt(f[0]) !== null && /^\d+$/.test(f[2])) addToken(idx, `${f[0]}/${f[2]}`, [f[3] ? `${f[3]} targets` : '', f[4] && f[4] !== '-' ? f[4] : ''].filter(Boolean).join(' · '));
     }
   } else if (def.format === 'spamhaus-json') {
     for (const line of text.split('\n')) {
@@ -172,6 +215,13 @@ class Feeds {
     } else if (type === 'domain') {
       const parts = value.split('.');
       for (const [id, idx] of this.idx) {
+        if (idx.hashed) {
+          for (let i = 0; i < parts.length - 1; i++) {
+            const d = parts.slice(i).join('.');
+            if (hashedHas(idx.hashed, d)) { hits.push({ feed: id, matched: d, label: '' }); break; }
+          }
+          continue;
+        }
         if (!idx.domains.size) continue;
         if (idx.domains.has(value)) { hits.push({ feed: id, matched: value, label: idx.labels.get(value) || '' }); continue; }
         if (!idx.wildcard) continue;

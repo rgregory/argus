@@ -50,9 +50,42 @@ It asks for your password, then:
 - copies `argus-collect.sh` to `/usr/local/libexec/argus/`, owned by root
 - creates the inbox at `/Users/Shared/Argus/inbox`
 - loads a LaunchDaemon (`com.argus.collect`) that runs as root every 5 minutes and exports the security slice of the unified log
-- loads a LaunchAgent (`com.argus.collect.user`) that runs as you every 15 minutes and picks up container logs, launchd jobs and Ollama
+- loads a LaunchAgent (`com.argus.collect.user`) that runs as you every 15 minutes and picks up container logs, launchd jobs, Ollama, download history, browser extensions and the app and Homebrew inventory used by the Vulnerabilities tab
 
 The first batch lands in the inbox within a minute. If something looks wrong, check `/var/log/argus-collect.log`. [The host collector](../README.md#the-host-collector) lists everything both jobs do.
+
+## Endpoint telemetry (optional)
+
+Two parts of the Endpoint tab need macOS's Full Disk Access permission, so they're installed separately. Argus works without them; the Endpoint tab just shows those cards as not installed.
+
+```bash
+./argus.sh install-telemetry
+```
+
+It asks for your password, then loads two root LaunchDaemons:
+
+- `com.argus.eslogger` runs Apple's `/usr/bin/eslogger` to record Endpoint Security events (process launches, background items, authentication, XProtect, sudo, profiles, permission changes, remote logins). Events your macOS version doesn't offer are skipped. The collector ships them into the inbox every 5 minutes.
+- `com.argus.tcc` runs `/usr/bin/sqlite3` once an hour to make a read-only copy of the system permission (TCC) database.
+
+launchd starts each binary directly, so macOS asks whether *that binary* has Full Disk Access, not bash or Terminal. Grant it to exactly those two:
+
+1. Open System Settings → Privacy & Security → Full Disk Access.
+2. In Terminal, run `open -R /usr/bin/eslogger` and drag `eslogger` from the Finder window into the list. Do the same with `open -R /usr/bin/sqlite3`. (The **+** button's file picker sometimes won't add files from `/usr/bin`; dragging always works.)
+3. Make sure both switches are on, then restart the jobs and check:
+
+```bash
+sudo launchctl kickstart -k system/com.argus.eslogger
+sudo launchctl kickstart -k system/com.argus.tcc
+./argus.sh telemetry-status
+```
+
+`telemetry-status` shows the eslogger spool growing, the number of event batches in the inbox, and how many rows came out of the TCC database. Error lines from before you granted access stay in the log tail; the spool size is what tells you it's working. Some macOS versions have no per-user TCC database, and the status says so.
+
+What this costs: either binary, when started by launchd as root, can read anything on the disk. Only root can create a LaunchDaemon, so another account can't use the grant without already having root. Remove the two entries from Full Disk Access when you uninstall.
+
+### Little Snitch
+
+If [Little Snitch](https://obdev.at/littlesnitch) is installed, the root collector reads its traffic history every 5 minutes with Little Snitch's own `littlesnitch log-traffic` command. Turn on Little Snitch → Settings → Security → **Allow access via Terminal**, or the command refuses. Nothing else is needed; `sudo grep -i littlesnitch /var/log/argus-collect.log` shows a row count per run once it's working.
 
 ## 5. Start Argus
 
@@ -89,6 +122,7 @@ To replace the dashboard token, clear `ARGUS_TOKEN` in `argus.env`, run `./argus
 | Collector inbox | `/Users/Shared/Argus/inbox` |
 | Collector script | `/usr/local/libexec/argus/argus-collect.sh` |
 | Collector logs | `/var/log/argus-collect.log` and `~/Library/Logs/argus-collect-user.log` |
+| Endpoint telemetry | spool `/Users/Shared/Argus/spool` (root only), logs `/var/log/argus-eslogger.log` and `/var/log/argus-tcc.log` |
 | Argus and CrowdSec state | container volumes `argus-state`, `argus-cs-config`, `argus-cs-data` |
 
 Two of these are settings: move the inbox with `ARGUS_INBOX` in `argus.env`, and `~/.argus` with `ARGUS_HOME` as described above. The collector script and log paths are fixed.
@@ -102,6 +136,7 @@ git diff HEAD@{1} -- collector/  # read what changed in the part that runs as ro
 ./argus.sh init                  # adds new keys (like the 1.1.0 access token); Enter keeps your credentials
 ./argus.sh build                 # the server and dashboard live in the image, so rebuild
 ./argus.sh install-collector     # git pull doesn't update the copy root runs
+./argus.sh install-telemetry     # only if you use it; rewrites the two job definitions
 ./argus.sh restart
 ./argus.sh open
 ```
@@ -112,6 +147,7 @@ Your config, reports, indicators and CrowdSec state all carry over. `init` never
 
 ```bash
 ./argus.sh stream off            # only if you turned on live streaming
+./argus.sh uninstall-telemetry   # only if you installed it; then remove eslogger and sqlite3 from Full Disk Access
 ./argus.sh uninstall-collector   # removes the LaunchDaemon, LaunchAgent and collector script
 ./argus.sh destroy               # removes the container and its volumes (asks you to type "destroy")
 ```

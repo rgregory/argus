@@ -28,6 +28,8 @@
 <li>A list of findings ranked by severity, covering things worth a second look like a launch agent running from a temp folder, a first-launch prompt for an unsigned app, failed SSH logins or a new admin account.</li>
 <li>A quick read on your security posture: SIP, FileVault, firewall, Gatekeeper, automatic updates, and how out of date XProtect is.</li>
 <li>Reputation checks on the IPs and domains your Mac and your network actually touch, against threat feeds, CrowdSec and OSINT, with newly registered domains from Pi-hole called out.</li>
+<li>An Endpoint view of what's actually running: suspicious command lines and programs launched from odd places (via Apple's Endpoint Security), which program talks to which address (with Little Snitch if you have it), new background items, permission grants, browser extensions, trusted certificates, and changes to SSH keys, sudoers and shell startup files.</li>
+<li>A Vulnerabilities view: whether macOS and Safari are missing security releases, which installed apps predate fixes for vulnerabilities CISA lists as exploited in the wild, and Homebrew packages with published advisories.</li>
 <li>Syslog from your routers, NAS boxes and other hosts in the same place, run through CrowdSec's detection scenarios.</li>
 <li>JSON and CSV reports every five minutes, ready to grep, diff or feed into something else.</li>
 <li>Isolation from your Mac. Everything that handles untrusted data runs in its own Linux VM, with read-only access to your logs and one writable folder. See <a href="#how-isolation-reduces-risk">How isolation reduces risk</a>.</li>
@@ -37,8 +39,10 @@
 <pre class="mermaid">
 flowchart TB
   subgraph HOST[&quot;macOS host&quot;]
-    LD[&quot;&lt;b&gt;LaunchDaemon&lt;/b&gt;&lt;br/&gt;root · every 5 min&lt;br/&gt;unified-log security slice&quot;]
-    LA[&quot;&lt;b&gt;LaunchAgent&lt;/b&gt;&lt;br/&gt;you · every 15 min&lt;br/&gt;containers, launchd, Ollama&quot;]
+    LD[&quot;&lt;b&gt;LaunchDaemon&lt;/b&gt;&lt;br/&gt;root · every 5 min&lt;br/&gt;unified-log security slice&lt;br/&gt;connections · file integrity&quot;]
+    LA[&quot;&lt;b&gt;LaunchAgent&lt;/b&gt;&lt;br/&gt;you · every 15 min&lt;br/&gt;containers, launchd, Ollama&lt;br/&gt;downloads · extensions · inventory&quot;]
+    ES[&quot;&lt;b&gt;eslogger · TCC reader&lt;/b&gt;&lt;br/&gt;optional · Full Disk Access&quot;]
+    ES --&gt; LD
     INBOX[(&quot;/Users/Shared/Argus/inbox&lt;br/&gt;root-owned&quot;)]
     LOGS[(&quot;/var/log · /Library/Logs&lt;br/&gt;~/Library/Logs&quot;)]
     LD --&gt; INBOX
@@ -55,6 +59,7 @@ flowchart TB
     SVC[&quot;&lt;b&gt;Argus service&lt;/b&gt; · :7080&lt;br/&gt;findings · posture · timeline&quot;]
     CS[&quot;&lt;b&gt;CrowdSec&lt;/b&gt;&lt;br/&gt;detect only · no bouncer&quot;]
     ENRICH[&quot;&lt;b&gt;Enrichment&lt;/b&gt; · IPs, domains&lt;br/&gt;threat feeds · CrowdSec list&lt;br/&gt;RDAP · Shodan · CTI · VT&quot;]
+    VULN[&quot;&lt;b&gt;Vulnerabilities&lt;/b&gt;&lt;br/&gt;Apple releases · CISA KEV&lt;br/&gt;Homebrew advisories&quot;]
   end
 
   DATA[(&quot;$ARGUS_HOME/data&lt;br/&gt;only writable folder&quot;)]
@@ -68,6 +73,7 @@ flowchart TB
   SYSLOG -- &quot;per-host logs&quot; --&gt; CS
   SVC -- &quot;events&quot; --&gt; CS
   SVC --&gt; ENRICH
+  SVC --&gt; VULN
   ENRICH &lt;-- &quot;flagged&quot; --&gt; INTELOWL
   SVC -- &quot;reports&quot; --&gt; DATA
 
@@ -244,7 +250,7 @@ flowchart TB
 <h2 id="the-host-collector">The host collector</h2>
 <h3 id="why-it-exists">Why it exists</h3>
 <p>macOS keeps its unified log in a binary format that only Apple's own <code>log</code> tool can read, so a Linux container can't open it. Some of the other things worth checking, like SIP and FileVault status, login history, or crash reports only root can read, also need a command run on the Mac itself. So Argus installs two small scheduled jobs on the Mac that gather this and drop it into an inbox folder, and the container reads that folder read-only.</p>
-<p>Both jobs run the same bash script, <a href="../collector/argus-collect.sh"><code>collector/argus-collect.sh</code></a>. It's under 200 lines, and it's worth reading before you install it.</p>
+<p>Both jobs run the same bash script, <a href="../collector/argus-collect.sh"><code>collector/argus-collect.sh</code></a>. It's about 420 lines of plain bash, and it's worth reading before you install it.</p>
 <h3 id="why-root">Why root</h3>
 <p>Most of the collector would work fine as your own user. This is what root adds, and what it costs:</p>
 <table class="table table-sm">
@@ -277,6 +283,16 @@ flowchart TB
 <td>Low: profile names and identifiers only</td>
 </tr>
 <tr>
+<td>Hashing sudoers, PAM, <code>/etc/ssh</code> and every account's SSH keys and shell startup files</td>
+<td>Catches a new SSH key, sudo rule or login hook, which are classic ways to keep access</td>
+<td>Hashes and key fingerprints (not contents) become readable by your account</td>
+</tr>
+<tr>
+<td><code>littlesnitch log-traffic</code></td>
+<td>Per-program traffic history, including denied attempts</td>
+<td>Every program's destinations and byte counts become readable by your account</td>
+</tr>
+<tr>
 <td>Running as a LaunchDaemon</td>
 <td>Keeps collecting at the login window, straight after a reboot, and while you're logged out</td>
 <td>A root process runs every 5 minutes whether you're there or not</td>
@@ -295,7 +311,9 @@ flowchart TB
 <p>On every run:</p>
 <ul>
 <li>Runs <code>log show</code> with a fixed filter over the time since its last run, so nothing is missed or read twice. The filter matches <code>sudo</code>, <code>authd</code>, <code>SecurityAgent</code>, <code>sshd</code>, Screen Sharing, screen lock and unlock, Gatekeeper (<code>syspolicyd</code>), XProtect, the application firewall, TCC permission events, background task management and Little Snitch, plus every fault-level message. After sleep or a reboot it catches up at most 60 minutes (<code>ARGUS_MAX_BACKLOG_MIN</code>).</li>
-<li>Lists established TCP connections with <code>lsof</code>.</li>
+<li>Lists established TCP connections with <code>lsof</code>, and the running processes with <code>ps</code>, so each connection can be tied to a program.</li>
+<li>Moves new Endpoint Security events from the eslogger spool into the inbox, if you installed the optional telemetry (at most 64 MB a run, <code>ARGUS_ES_MAX_MB</code>).</li>
+<li>If Little Snitch is installed and allows Terminal access, exports its traffic history for the same time window with <code>littlesnitch log-traffic</code>.</li>
 </ul>
 <p>Once an hour:</p>
 <ul>
@@ -303,21 +321,24 @@ flowchart TB
 <li>Lists <code>/Library/LaunchAgents</code>, <code>/Library/LaunchDaemons</code> and every user's <code>~/Library/LaunchAgents</code>, and prints each plist with <code>plutil -p</code>.</li>
 <li>Saves the output of <code>sfltool dumpbtm</code> (login and background items), <code>systemextensionsctl list</code>, <code>profiles list</code>, <code>last</code> (login history), <code>pmset -g log</code> (sleep and wake lines only), <code>softwareupdate --history</code>, the tail of <code>/var/log/install.log</code>, and the listening TCP and UDP ports from <code>lsof</code>.</li>
 <li>Copies crash, panic, hang and spin reports from the last 14 days out of <code>/Library/Logs/DiagnosticReports</code>.</li>
+<li>Checks automatic login, the guest account, Screen Sharing, File Sharing, Remote Apple Events and the XProtect bundle's version and age, and (every 6 hours) lists pending updates with <code>softwareupdate --list --no-scan</code>.</li>
+<li>Hashes the files most often abused for persistence or privilege: <code>/etc/hosts</code>, sudoers and <code>/etc/sudoers.d</code>, <code>/etc/pam.d</code>, sshd and ssh config, the system shell profiles, <code>/etc/periodic</code>, at jobs, authorization plugins, scripting additions and directory-service plug-ins, plus each account's <code>~/.ssh/authorized_keys</code> (with <code>ssh-keygen -l</code> fingerprints), <code>~/.ssh/config</code> and <code>rc</code>, and shell startup files. It records hashes, sizes and modes, never contents. It also reads the login and logout hook settings.</li>
+<li>Lists the System keychain's certificates (<code>security find-certificate -Z</code>, names and hashes) and admin trust settings (<code>security dump-trust-settings -d</code>).</li>
 </ul>
 <p>Housekeeping:</p>
 <ul>
-<li>Deletes its own files from the inbox: log slices older than 3 days (<code>ARGUS_INBOX_DAYS</code>), copied crash reports older than 14 days, and leftover temp files.</li>
+<li>Deletes its own files from the inbox: log slices and Little Snitch exports older than 3 days (<code>ARGUS_INBOX_DAYS</code>), Endpoint Security batches older than 12 hours (<code>ARGUS_ES_KEEP_HOURS</code>), copied crash reports older than 14 days, and leftover temp files. It empties the eslogger spool once everything in it has been shipped and it's over 256 MB.</li>
 <li>Writes <code>meta.json</code> with the hostname, macOS version, time zone and time of the last run.</li>
 </ul>
 <h3 id="what-the-root-job-doesnt-do">What the root job doesn't do</h3>
 <ul>
-<li>It never touches the network. The script makes no network calls of any kind.</li>
+<li>It never touches the network. The script makes no network calls of any kind. (<code>littlesnitch log-traffic</code> only reads Little Snitch's local history.)</li>
 <li>It doesn't change any system setting. Every command it runs only reads or reports status.</li>
 <li>It only writes inside the inbox (<code>/Users/Shared/Argus/inbox</code> by default), and it only deletes its own old files there. The one setting it changes is the inbox folder's own permissions, which it keeps locked to root and you.</li>
 <li>It never runs anything from the inbox or from the container. The container mounts the inbox read-only, so nothing in the container can feed instructions back to the root job.</li>
 <li>It doesn't read the whole unified log, only the filtered slice above. (<code>argus.sh stream on</code> is a separate, optional job, described under <a href="INSTALL.html#optional-setup">Optional setup</a>.)</li>
-<li>It doesn't read your documents or anything else in your home folder, apart from listing and printing the plists in each user's <code>~/Library/LaunchAgents</code>.</li>
-<li>It doesn't open the TCC database. Permission changes come from TCC's own log messages.</li>
+<li>It doesn't read your documents. In home folders it only lists and prints the plists in <code>~/Library/LaunchAgents</code> and hashes the SSH and shell startup files listed above.</li>
+<li>It doesn't open the TCC database itself. The optional <code>com.argus.tcc</code> job does that, read-only, with <code>sqlite3</code> (see <a href="INSTALL.html#endpoint-telemetry-optional">docs/INSTALL.md</a>).</li>
 </ul>
 <p>The script is installed at <code>/usr/local/libexec/argus/argus-collect.sh</code> as <code>root:wheel</code>, mode <code>0755</code>, with any ACLs stripped, and the LaunchDaemon plist is root-owned too. Owning the file isn't enough on its own, though. Anyone who can write to a folder above it can rename the script and drop in their own, and root would run that instead. Folders under <code>/usr/local</code> are root-owned on a stock Mac, but Homebrew on Intel Macs and some other installers hand parts of it to your account.</p>
 <p>So <code>install-collector</code> checks every folder from <code>/</code> down to the script and refuses to install if any of them could be changed by an account other than root. It tells you which folder is the problem and how to fix it. <code>./argus.sh status</code> runs the same check again and also warns you when:</p>
@@ -332,6 +353,9 @@ flowchart TB
 <li><code>launchctl list</code> and <code>crontab -l</code> for your account</li>
 <li>the last 5,000 lines of logs from every Apple container on the Mac, plus the last 15 minutes of the container runtime's own log</li>
 <li>the tail of Ollama's server log, if you have one at <code>~/.ollama/logs/server.log</code></li>
+<li>the last 30 days of download history from the quarantine database (<code>~/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2</code>, read-only): when, which app, and the file and page URLs where macOS recorded them</li>
+<li>every 6 hours, an app inventory (<code>system_profiler SPApplicationsDataType</code>) and, if Homebrew is installed, <code>brew list --versions</code>, <code>brew info --json=v2 --installed</code> and, once a day, <code>brew vulns</code></li>
+<li>every hour, browser extensions: manifests and install details from Chromium-family profiles (read with JavaScript for Automation), Firefox's <code>extensions.json</code>, Safari extensions from <code>pluginkit</code>, plus your login keychain's certificate names and your trust settings</li>
 <li>Pi-hole's query log from inside its container, but only if you set <code>ARGUS_PIHOLE_QUERYLOG=1</code> (off by default; the Pi-hole API is the normal route)</li>
 </ul>
 <p>Container logs can contain whatever those containers print, so if one of your other containers logs secrets, Argus will see them too.</p>
@@ -378,8 +402,8 @@ ls -la /Users/Shared/Argus/inbox                                            # wh
 </tr>
 <tr>
 <td>2</td>
-<td>SSH, Screen Sharing and firewall sources; DNS names that look generated or tunnelled</td>
-<td>the level 1 providers plus DNS resolution and ThreatFox</td>
+<td>SSH, Screen Sharing and firewall sources; download hosts; DNS names that look generated or tunnelled</td>
+<td>the level 1 providers plus DNS resolution, ThreatFox and urlscan.io</td>
 </tr>
 <tr>
 <td>1</td>
@@ -423,17 +447,32 @@ ls -la /Users/Shared/Argus/inbox                                            # wh
 <td>abuse.ch now requires a key; get one at auth.abuse.ch</td>
 </tr>
 <tr>
+<td>HaGeZi newly registered domains (<code>nrd7</code>, <code>nrd14-8</code>) and DGA domains (14 days)</td>
+<td>none</td>
+<td>about 5.7 million domains, held as hashes (about 50 MB of RAM); a hit alone is a weak signal. <code>ARGUS_NRD_LISTS</code> picks the bands, <code>none</code> turns them off</td>
+</tr>
+<tr>
+<td>Tor exit nodes</td>
+<td>none</td>
+<td>not malicious by itself; worth a look on inbound logins</td>
+</tr>
+<tr>
+<td>DShield top attacking /24s</td>
+<td>none</td>
+<td>non-commercial license, see <a href="../SECURITY.md#data-source-terms">SECURITY.md</a></td>
+</tr>
+<tr>
 <td>CrowdSec community blocklist</td>
 <td>none</td>
 <td>read from the local API with the <code>argus</code> bouncer key</td>
 </tr>
 </tbody>
 </table>
-<p>The optional keys go in <code>argus.env</code>: <code>ABUSECH_AUTH_KEY</code>, <code>CROWDSEC_CTI_KEY</code>, <code>ABUSEIPDB_KEY</code>, <code>VT_API_KEY</code>, <code>OTX_API_KEY</code> and <code>GREYNOISE_KEY</code>. A provider without a key stays off, and daily caps keep you inside the free tiers. You can add your own feeds in <code>$ARGUS_HOME/data/config/feeds.json</code>:</p>
+<p>The optional keys go in <code>argus.env</code>: <code>ABUSECH_AUTH_KEY</code>, <code>CROWDSEC_CTI_KEY</code>, <code>ABUSEIPDB_KEY</code>, <code>VT_API_KEY</code>, <code>OTX_API_KEY</code>, <code>GREYNOISE_KEY</code> and <code>URLSCAN_API_KEY</code>. A provider without a key stays off, and daily caps keep you inside the free tiers. You can add your own feeds in <code>$ARGUS_HOME/data/config/feeds.json</code>:</p>
 <pre><code class="language-json">[{&quot;id&quot;: &quot;my_list&quot;, &quot;name&quot;: &quot;My blocklist&quot;, &quot;kind&quot;: &quot;domain&quot;, &quot;format&quot;: &quot;wildcard&quot;, &quot;severity&quot;: &quot;high&quot;,
   &quot;url&quot;: &quot;https://example.org/list.txt&quot;, &quot;ttlHours&quot;: 12}]
 </code></pre>
-<p>Supported formats are <code>plain</code> (IPs, CIDRs or domains, one per line), <code>wildcard</code> (domains that also match their subdomains), <code>url</code> (full URLs, matched on the exact host), <code>ipsum</code> and <code>spamhaus-json</code>.</p>
+<p>Supported formats are <code>plain</code> (IPs, CIDRs or domains, one per line), <code>wildcard</code> (domains that also match their subdomains), <code>url</code> (full URLs, matched on the exact host), <code>domains-hashed</code> (very large domain lists, matched like <code>wildcard</code> but stored as hashes), <code>ipsum</code>, <code>dshield</code> and <code>spamhaus-json</code>.</p>
 <h2 id="what-the-macos-analysis-covers">What the macOS analysis covers</h2>
 <table class="table table-sm">
 <thead>
@@ -461,11 +500,31 @@ ls -la /Users/Shared/Argus/inbox                                            # wh
 </tr>
 <tr>
 <td>Network</td>
-<td>services listening beyond localhost, and the public endpoints the Mac is talking to</td>
+<td>services listening beyond localhost; which program talks to which public address (from <code>lsof</code>, or from Little Snitch with bytes, denied attempts, accepted inbound connections and large uploads)</td>
+</tr>
+<tr>
+<td>Endpoint Security</td>
+<td>suspicious command lines, launches from temp or hidden folders, Office/browser/chat apps starting shells, live background-item registrations, XProtect actions, failed authentication, sudo and su rejections, profile installs, live permission grants, first-seen third-party programs (optional telemetry)</td>
+</tr>
+<tr>
+<td>File integrity</td>
+<td>changes to SSH keys, sudoers, PAM, sshd config, authorization plugins, login hooks, the hosts file, scheduled scripts and shell startup files, kept for 7 days</td>
+</tr>
+<tr>
+<td>Browser and certificates</td>
+<td>sideloaded, unsigned or newly added browser extensions and ones with all-sites access plus powerful permissions; new System keychain certificates and newly trusted roots</td>
+</tr>
+<tr>
+<td>Downloads</td>
+<td>where files came from (quarantine database), downloads straight from IP addresses or over plain HTTP; download hosts go through threat intel</td>
+</tr>
+<tr>
+<td>Vulnerabilities</td>
+<td>macOS and Safari against Apple's security releases, cross-checked with CISA KEV; installed apps that predate KEV entries for their product; pending Apple updates; Homebrew advisories (<code>brew vulns</code>, or OSV.dev as a fallback)</td>
 </tr>
 <tr>
 <td>Posture</td>
-<td>SIP, Gatekeeper, FileVault, firewall and stealth mode, Remote Login, automatic updates, and how old the XProtect definitions are</td>
+<td>SIP, Gatekeeper, FileVault, firewall and stealth mode, Remote Login, automatic updates, automatic login, guest account, sharing services, and how old XProtect is. The dashboard lists failing checks and tucks passing ones behind a link</td>
 </tr>
 <tr>
 <td>System</td>
@@ -509,6 +568,11 @@ ls -la /Users/Shared/Argus/inbox                                            # wh
 <td>Home router syslog with firewall logging on</td>
 <td>1 to 20 messages/s</td>
 <td>about 10 to 250 MB</td>
+</tr>
+<tr>
+<td>Endpoint Security (optional telemetry), mostly process launches</td>
+<td>about 1 to 5 events/s on a busy developer Mac</td>
+<td>a few hundred MB of raw JSON in the spool; Argus keeps only per-program counts and the notable events</td>
 </tr>
 </tbody>
 </table>
@@ -662,7 +726,7 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 <tbody>
 <tr>
 <td><code>argus.sh</code></td>
-<td>The manager: build, up/down, collector install</td>
+<td>The manager: build, up/down, collector and telemetry install</td>
 </tr>
 <tr>
 <td><code>argus.env.example</code></td>
@@ -768,6 +832,18 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 <tr>
 <td><code>lib/ingest.js</code></td>
 <td>Inbox, syslog spool, Pi-hole</td>
+</tr>
+<tr>
+<td><code>lib/hostsec.js</code></td>
+<td>Endpoint Security, TCC database, background-item changes, downloads</td>
+</tr>
+<tr>
+<td><code>lib/hostsec-extra.js</code></td>
+<td>Program ↔ network, Little Snitch, file integrity, browser extensions, certificates</td>
+</tr>
+<tr>
+<td><code>lib/vulns.js</code></td>
+<td>Apple security releases, CISA KEV, app and Homebrew vulnerability matching</td>
 </tr>
 <tr>
 <td><code>lib/store.js</code></td>

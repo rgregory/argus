@@ -140,7 +140,7 @@
       u: {
         events: 0, procs: new Map(), sudo: [], ssh: [], screen: [], authd: new Map(), lock: [],
         gk: [], xp: [], xpSeen: new Map(), fw: [], tcc: new Map(), tccPending: new Map(), tccRaw: 0,
-        btm: [], btmSeen: new Set(), faults: new Map(), faultCount: 0,
+        btm: [], btmSeen: new Set(), faults: new Map(), faultCount: 0, authFail: [],
       },
       crashes: new Map(),
       raw: {},            // latest text per snapshot kind
@@ -307,6 +307,7 @@
     if (p === 'sshd' || p === 'sshd-session' || p === 'sshd-auth') return sshEvent(st, e);
     if (p === 'screensharingd') return screenEvent(st, e);
     if (p === 'authd') return authdEvent(st, e);
+    if ((p === 'opendirectoryd' || p === 'loginwindow') && RX_AUTHFAIL.test(e.msg)) return authFailEvent(st, e);
     if (p === 'loginwindow') return lockEvent(st, e);
     if (p === 'syspolicyd') return gkEvent(st, e);
     if (/^xprotect/i.test(p)) return xpEvent(st, e);
@@ -379,6 +380,14 @@
     if (!a) { a = { right: m[2], client: m[3], ok: 0, fail: 0, last: null }; st.u.authd.set(key, a); }
     if (m[1] === 'Succeeded') a.ok++; else { a.fail++; bump(st, e.ts, 'auth'); }
     if (e.ts && (!a.last || e.ts > a.last)) a.last = e.ts;
+  }
+
+  // opendirectoryd / loginwindow password failures (message formats vary by macOS release)
+  const RX_AUTHFAIL = /authentication fail|failed authentication|ODRecordVerifyPassword.*(fail|error|-1400\d)|password verification failed|login fail|incorrect password/i;
+  function authFailEvent(st, e) {
+    const user = (e.msg.match(/(?:for (?:user |record )?|user[=: ]+|name[=: ]+)['"<]?([A-Za-z0-9._-]{1,64})['">]?/i) || [])[1] || '';
+    pushCap(st.u.authFail, { ts: e.ts, proc: e.proc, user, msg: trunc(e.msg, 300) }, 5000);
+    bump(st, e.ts, 'auth');
   }
 
   function lockEvent(st, e) {
@@ -720,7 +729,8 @@
     'Application firewall': ['medium', 'low'], 'Stealth mode': ['low', 'low'], 'Remote Login (SSH)': ['medium', 'medium'],
     'Check for updates automatically': ['high', 'medium'], 'Download updates automatically': ['low', 'low'],
     'Install Rapid Security Responses / system files': ['high', 'medium'], 'Install XProtect / security data': ['high', 'medium'],
-    'XProtect definitions': ['medium', 'medium'],
+    'XProtect definitions': ['medium', 'medium'], 'Automatic login': ['high', 'medium'], 'Guest account': ['medium', 'low'],
+    'Screen Sharing': ['medium', 'low'], 'File Sharing (SMB)': ['low', 'low'], 'Remote Apple Events': ['medium', 'medium'], 'FTP proxy': ['low', 'low'], 'XProtect bundle': ['medium', 'medium'],
   };
   function parsePosture(ctx) {
     const st = ctx.st, out = [], text = st.raw.posture;
@@ -764,6 +774,23 @@
       chk('Download updates automatically', 'AutomaticDownload', 'warn', 'Speeds up patching.');
       chk('Install Rapid Security Responses / system files', 'CriticalUpdateInstall', 'fail', 'Delivers urgent security fixes between OS releases.');
       chk('Install XProtect / security data', 'ConfigDataInstall', 'fail', 'Keeps XProtect malware signatures current.');
+    }
+    const al = get('Automatic login');
+    if (al) row('Automatic login', /Automatic login:\s*On/i.test(al) ? 'fail' : 'pass', al, 'Anyone who powers on the Mac gets your session; also disables FileVault pre-boot authentication.');
+    const ga = get('Guest account');
+    if (ga) row('Guest account', /Guest account:\s*On/i.test(ga) ? 'warn' : 'pass', ga, 'Lets anyone log in without a password.', 'Guest account is enabled');
+    const ss = sec['Sharing services'] || [];
+    const SHARE = { 'com.apple.screensharing': ['Screen Sharing', 'Remote control of this Mac (VNC).'], 'com.apple.smbd': ['File Sharing (SMB)', 'Shares folders over the network.'],
+      'com.apple.AEServer': ['Remote Apple Events', 'Lets other Macs send AppleScript events to this one.'], 'com.apple.ftp-proxy': ['FTP proxy', 'Legacy FTP proxy service.'] };
+    for (const l of ss) {
+      const m = l.match(/^(\S+):\s*(loaded|off)/); if (!m || !SHARE[m[1]]) continue;
+      row(SHARE[m[1]][0], m[2] === 'loaded' ? 'warn' : 'pass', l, SHARE[m[1]][1], `${SHARE[m[1]][0]} is on`);
+    }
+    const xpb = get('XProtect');
+    if (xpb) {
+      const upd = (xpb.match(/XProtect updated:\s*(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)/) || [])[1];
+      const age = upd ? Math.floor((st.ref - parseTs(upd)) / DAY) : null;
+      row('XProtect bundle', age === null ? 'unknown' : age > 30 ? 'warn' : 'pass', xpb.replace(/\n/g, '; '), 'Apple updates XProtect signatures every week or two; a stale bundle means updates are not arriving.', age !== null ? `XProtect definitions not updated in ${age} days` : '');
     }
     return out;
   }
@@ -857,6 +884,13 @@
       detail: 'Admin prompts that were cancelled or got the wrong password. Usually benign; repeated failures on system.privilege.admin are worth a look.',
       evidence: authFails.map(a => `${a.right} ← ${a.client}: ${a.fail} failed, ${a.ok} ok`) });
 
+    const af = (u.authFail || []).slice().sort(byTs);
+    if (af.length) {
+      const byUser = new Map(); af.forEach(a => inc(byUser, a.user || '(unknown)'));
+      add({ sev: af.length >= 20 ? 'medium' : 'low', area: 'Access', title: plural(af.length, 'failed password check'), source: 'unified log: opendirectoryd / loginwindow',
+        detail: 'Wrong passwords at the login window, screen saver, or any Open Directory password check. A burst while you were away is worth a look.',
+        evidence: [...topN(byUser, 20).map(x => `${x.key}: ${x.count} failures`), ...af.slice(-50).map(a => `${fmtTs(a.ts)}  ${a.proc}: ${a.msg}`)] });
+    }
     const logins = parseLogins(ctx);
     const users = new Map(); logins.forEach(l => { if (!/^(reboot|shutdown|root|_mbsetupuser)$/.test(l.user)) inc(users, l.user); });
     const primary = topN(users, 1)[0];
@@ -1013,7 +1047,7 @@
     const launch = parseLaunchPlists(st.raw.launchPlists).map(it => {
       const meta = dirs.get(it.path);
       const domain = /\/Library\/LaunchDaemons\//.test(it.path) ? 'Daemon (root)' : /^\/Library\/LaunchAgents\//.test(it.path) ? 'Agent (all users)' : 'Agent (your account)';
-      if (/^com\.argus\.collect/.test(it.label) && /\/usr\/local\/libexec\/argus\//.test(it.args.join(' '))) {
+      if (/^com\.argus\.(dev\.)?(collect|eslogger|tcc)/.test(it.label) && /\/usr\/local\/libexec\/argus(-dev)?\/|\/usr\/bin\/(eslogger|sqlite3)\b/.test(it.args.join(' ') || it.program)) {
         return { ...it, domain, flags: ['Argus collector'], sev: 'info', mtime: meta ? meta.mtime : null, owner: meta ? meta.owner : '' };
       }
       const flags = []; let sev = 'info';
@@ -1230,5 +1264,5 @@
     return { requests: o.requests, clients, paths: topN(o.byPath, 20), status: topN(o.status, 10), errors: o.errors.slice(-100) };
   }
 
-  return { newState, classify, ingest, finalize, handleEvent, addDnsQuery, ipScope, baseDomain, dgaScore, parseTs, pathRisk, fmtTs, CDN_BASES, SKIP_DNS, SEV_ORDER, TCC_NAMES };
+  return { newState, classify, ingest, finalize, handleEvent, addDnsQuery, ipScope, baseDomain, dgaScore, parseTs, pathRisk, fmtTs, parseBtmDump, CDN_BASES, SKIP_DNS, SEV_ORDER, TCC_NAMES, TCC_HIGH };
 });

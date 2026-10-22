@@ -48,9 +48,32 @@ cd argus
 <li>copies <code>argus-collect.sh</code> to <code>/usr/local/libexec/argus/</code>, owned by root</li>
 <li>creates the inbox at <code>/Users/Shared/Argus/inbox</code></li>
 <li>loads a LaunchDaemon (<code>com.argus.collect</code>) that runs as root every 5 minutes and exports the security slice of the unified log</li>
-<li>loads a LaunchAgent (<code>com.argus.collect.user</code>) that runs as you every 15 minutes and picks up container logs, launchd jobs and Ollama</li>
+<li>loads a LaunchAgent (<code>com.argus.collect.user</code>) that runs as you every 15 minutes and picks up container logs, launchd jobs, Ollama, download history, browser extensions and the app and Homebrew inventory used by the Vulnerabilities tab</li>
 </ul>
 <p>The first batch lands in the inbox within a minute. If something looks wrong, check <code>/var/log/argus-collect.log</code>. <a href="README.html#the-host-collector">The host collector</a> lists everything both jobs do.</p>
+<h2 id="endpoint-telemetry-optional">Endpoint telemetry (optional)</h2>
+<p>Two parts of the Endpoint tab need macOS's Full Disk Access permission, so they're installed separately. Argus works without them; the Endpoint tab just shows those cards as not installed.</p>
+<pre><code class="language-bash">./argus.sh install-telemetry
+</code></pre>
+<p>It asks for your password, then loads two root LaunchDaemons:</p>
+<ul>
+<li><code>com.argus.eslogger</code> runs Apple's <code>/usr/bin/eslogger</code> to record Endpoint Security events (process launches, background items, authentication, XProtect, sudo, profiles, permission changes, remote logins). Events your macOS version doesn't offer are skipped. The collector ships them into the inbox every 5 minutes.</li>
+<li><code>com.argus.tcc</code> runs <code>/usr/bin/sqlite3</code> once an hour to make a read-only copy of the system permission (TCC) database.</li>
+</ul>
+<p>launchd starts each binary directly, so macOS asks whether <em>that binary</em> has Full Disk Access, not bash or Terminal. Grant it to exactly those two:</p>
+<ol>
+<li>Open System Settings → Privacy &amp; Security → Full Disk Access.</li>
+<li>In Terminal, run <code>open -R /usr/bin/eslogger</code> and drag <code>eslogger</code> from the Finder window into the list. Do the same with <code>open -R /usr/bin/sqlite3</code>. (The <strong>+</strong> button's file picker sometimes won't add files from <code>/usr/bin</code>; dragging always works.)</li>
+<li>Make sure both switches are on, then restart the jobs and check:</li>
+</ol>
+<pre><code class="language-bash">sudo launchctl kickstart -k system/com.argus.eslogger
+sudo launchctl kickstart -k system/com.argus.tcc
+./argus.sh telemetry-status
+</code></pre>
+<p><code>telemetry-status</code> shows the eslogger spool growing, the number of event batches in the inbox, and how many rows came out of the TCC database. Error lines from before you granted access stay in the log tail; the spool size is what tells you it's working. Some macOS versions have no per-user TCC database, and the status says so.</p>
+<p>What this costs: either binary, when started by launchd as root, can read anything on the disk. Only root can create a LaunchDaemon, so another account can't use the grant without already having root. Remove the two entries from Full Disk Access when you uninstall.</p>
+<h3 id="little-snitch">Little Snitch</h3>
+<p>If <a href="https://obdev.at/littlesnitch">Little Snitch</a> is installed, the root collector reads its traffic history every 5 minutes with Little Snitch's own <code>littlesnitch log-traffic</code> command. Turn on Little Snitch → Settings → Security → <strong>Allow access via Terminal</strong>, or the command refuses. Nothing else is needed; <code>sudo grep -i littlesnitch /var/log/argus-collect.log</code> shows a row count per run once it's working.</p>
 <h2 id="5-start-argus">5. Start Argus</h2>
 <pre><code class="language-bash">./argus.sh up
 </code></pre>
@@ -94,6 +117,10 @@ cd argus
 <td><code>/var/log/argus-collect.log</code> and <code>~/Library/Logs/argus-collect-user.log</code></td>
 </tr>
 <tr>
+<td>Endpoint telemetry</td>
+<td>spool <code>/Users/Shared/Argus/spool</code> (root only), logs <code>/var/log/argus-eslogger.log</code> and <code>/var/log/argus-tcc.log</code></td>
+</tr>
+<tr>
 <td>Argus and CrowdSec state</td>
 <td>container volumes <code>argus-state</code>, <code>argus-cs-config</code>, <code>argus-cs-data</code></td>
 </tr>
@@ -107,12 +134,14 @@ git diff HEAD@{1} -- collector/  # read what changed in the part that runs as ro
 ./argus.sh init                  # adds new keys (like the 1.1.0 access token); Enter keeps your credentials
 ./argus.sh build                 # the server and dashboard live in the image, so rebuild
 ./argus.sh install-collector     # git pull doesn't update the copy root runs
+./argus.sh install-telemetry     # only if you use it; rewrites the two job definitions
 ./argus.sh restart
 ./argus.sh open
 </code></pre>
 <p>Your config, reports, indicators and CrowdSec state all carry over. <code>init</code> never overwrites a value you've set, and settings added in a newer <code>argus.env.example</code> use their defaults until you copy them into your own <code>argus.env</code>. If you skip <code>install-collector</code>, <code>./argus.sh status</code> reminds you that the installed collector is out of date. <a href="../CHANGELOG.md">CHANGELOG.md</a> lists what changed in each release.</p>
 <h2 id="uninstalling">Uninstalling</h2>
 <pre><code class="language-bash">./argus.sh stream off            # only if you turned on live streaming
+./argus.sh uninstall-telemetry   # only if you installed it; then remove eslogger and sqlite3 from Full Disk Access
 ./argus.sh uninstall-collector   # removes the LaunchDaemon, LaunchAgent and collector script
 ./argus.sh destroy               # removes the container and its volumes (asks you to type &quot;destroy&quot;)
 </code></pre>

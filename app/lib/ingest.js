@@ -4,6 +4,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const engine = require('./engine');
+const { HostSec } = require('./hostsec');
+const { Vulns } = require('./vulns');
+// inputs owned by hostsec.js / vulns.js, not by the log engine
+const EXT_FILES = /^(tcc-(system|user)\.tsv|quarantine\.tsv|brew-(versions|vulns)\.txt|software-updates\.txt|procs\.txt|fim\.txt|certs-(system|user)\.txt|browser-extensions\.txt)$/;
 const { cfg, logger, fetchJson, walk, dayKey } = require('./util');
 
 const H = 3600e3;
@@ -25,6 +29,9 @@ class MacIngest {
     this.lastRebuild = 0; this.meta = {}; this.lastFile = null; this.lastFileAt = null;
     this.logDir = path.join(cfg.state, 'logs');
     fs.mkdirSync(path.join(this.logDir, 'remote'), { recursive: true });
+    this.hostsec = new HostSec(store, intel);
+    this.vulns = new Vulns(store);
+    this.vulnsBusy = false; this.vulnsLast = 0; this.ext = null;
   }
   host() { return safeName(this.meta.host || cfg.macHost || 'mac'); }
   readMeta() {
@@ -55,6 +62,13 @@ class MacIngest {
     const a = this.processNewUnified();
     const b = await this.processSnapshots();
     const c = await this.processCrashes();
+    let d = false;
+    try { d = this.hostsec.cycle(); } catch (e) { this.log.error(`hostsec: ${e.stack || e}`); }
+    if (!this.vulnsBusy && Date.now() - this.vulnsLast > 3600e3) {
+      this.vulnsBusy = true;
+      this.vulns.refresh().catch(e => this.log.warn(`vulns: ${e.message}`)).finally(() => { this.vulnsBusy = false; this.vulnsLast = Date.now(); this.dirty = true; });
+    }
+    if (d || Date.now() - (this.extAt || 0) > 300e3) this.dirty = true;
     if (cfg.pihole.url && dayKey() !== this.dnsDay) { this.dnsSt = engine.newState(); this.dnsDay = dayKey(); this.dirty = true; }
     if (a || b || c) this.dirty = true;
     if (this.dirty) this.finalize();
@@ -111,7 +125,7 @@ class MacIngest {
   async processSnapshots() {
     let any = false;
     for (const dir of ['snapshots', 'user', 'containers', 'apps']) {
-      for (const p of walk(path.join(cfg.inbox, dir), (x, n) => !/\.tmp(\.\d+)?$/.test(n) && !n.startsWith('.') && !n.endsWith('.json'))) {
+      for (const p of walk(path.join(cfg.inbox, dir), (x, n) => !/\.tmp(\.\d+)?$/.test(n) && !n.startsWith('.') && !n.endsWith('.json') && !EXT_FILES.test(n) && !/\/\.[^/]+\//.test(x))) {
         let st; try { st = fs.statSync(p); } catch (e) { continue; }
         const key = `${st.mtimeMs}|${st.size}`;
         if (this.snapSeen.get(p) === key) continue;
@@ -151,6 +165,19 @@ class MacIngest {
 
   finalize() {
     this.report = engine.finalize(this.st);
+    try {
+      const hs = this.hostsec.analyze({ report: this.report });
+      const vu = this.vulns.analyze(this.report.meta.os || this.meta.os || '');
+      const extra = [...hs.findings, ...vu.findings].map(f => ({ sev: f.sev, area: f.area, title: f.title, detail: f.detail || '', source: f.source || '',
+        evidence: (f.evidence || []).slice(0, 200).map(e => String(e).slice(0, 500)), count: f.count }));
+      const all = [...this.report.findings, ...extra].sort((a, b) => engine.SEV_ORDER[a.sev] - engine.SEV_ORDER[b.sev] || b.count - a.count);
+      all.forEach((f, i) => { f.id = i + 1; });
+      this.report.findings = all;
+      const counts = { high: 0, medium: 0, low: 0, info: 0 }; all.forEach(f => { counts[f.sev]++; });
+      this.report.counts = counts;
+      this.report.hostsec = hs.views; this.report.vulns = vu.view;
+      this.extAt = Date.now();
+    } catch (e) { this.log.error(`extensions: ${e.stack || e}`); }
     this.dnsReport = this.dnsSt.dns ? engine.finalize(this.dnsSt) : null;
     this.intel.addFromEngine(this.report.iocs);
     if (this.dnsReport) this.intel.addFromEngine(this.dnsReport.iocs);
@@ -163,11 +190,12 @@ class MacIngest {
     old.forEach(p => { try { fs.unlinkSync(p); } catch (e) { /* ignore */ } });
     this.store.run('DELETE FROM processed WHERE done_at < ?', Date.now() - (cfg.retainDays + cfg.windowHours / 24 + 2) * 24 * H);
     if (old.length) this.log.info(`pruned ${old.length} old log files`);
+    try { this.hostsec.prune(cfg.retainDays); } catch (e) { this.log.warn(`hostsec prune: ${e.message}`); }
   }
 
   status() {
     return { meta: this.meta, lastFile: this.lastFile, lastFileAt: this.lastFileAt, events: this.st.u.events, windowHours: cfg.windowHours,
-      inboxFiles: this.unifiedFiles().length, lastRebuild: this.lastRebuild };
+      inboxFiles: this.unifiedFiles().length, lastRebuild: this.lastRebuild, hostsec: this.hostsec.status(), vulns: this.vulns.status() };
   }
 }
 

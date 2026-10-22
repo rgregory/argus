@@ -130,9 +130,10 @@
             </div>
             <div class="col-lg-4">
               <div class="card h-100">
-                <div class="card-header"><h3 class="card-title">Posture</h3></div>
+                <div class="card-header"><h3 class="card-title">Posture</h3>
+                  <div class="card-actions small text-secondary" x-show="r.posture.length" x-text="r.posture.filter(p => p.status === 'pass').length + ' passing'"></div></div>
                 <div class="list-group list-group-flush">
-                  <template x-for="p in r.posture" :key="p.control">
+                  <template x-for="p in r.posture.filter(p => p.status !== 'pass' || showPassing)" :key="p.control">
                     <div class="list-group-item py-1" :title="p.why || ''">
                       <div class="d-flex align-items-start gap-2 small">
                         <i class="ti mt-1" :class="statusIcon(p.status)"></i>
@@ -140,6 +141,8 @@
                       </div>
                     </div>
                   </template>
+                  <div class="list-group-item text-secondary small" x-show="r.posture.length && !showPassing && !r.posture.some(p => p.status !== 'pass')">All checks pass.</div>
+                  <a href="#" class="list-group-item text-secondary small" x-show="r.posture.some(p => p.status === 'pass')" @click.prevent="showPassing = !showPassing" x-text="showPassing ? 'Hide passing checks' : 'Show ' + r.posture.filter(p => p.status === 'pass').length + ' passing checks'"></a>
                   <div class="list-group-item text-secondary small" x-show="!r.posture.length">Waiting for the first posture snapshot from the collector.</div>
                 </div>
               </div>
@@ -507,6 +510,212 @@
           </div>
         </div>
 
+        <!-- ============================================================ ENDPOINT -->
+        <div x-show="tab === 'endpoint'">
+          <template x-if="!r.hostsec"><div class="alert alert-info">No endpoint telemetry in this report yet.</div></template>
+          <template x-if="r.hostsec">
+          <div class="row row-cards">
+            <div class="col-12"><div class="row row-cards">
+              <div class="col-sm-6 col-lg-3"><div class="card card-sm"><div class="card-body">
+                <div class="subheader">Endpoint Security</div>
+                <div class="h2 mb-0" x-text="r.hostsec.es && r.hostsec.es.active ? num(r.hostsec.es.events) + ' events' : 'not active'"></div>
+                <div class="small text-secondary" x-text="r.hostsec.es && r.hostsec.es.active ? 'last chunk ' + ago(r.hostsec.es.lastFileAt) + ' · collecting since ' + fmt(r.hostsec.es.since) : 'run ./argus.sh install-telemetry and grant Full Disk Access to /usr/bin/eslogger'"></div></div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card card-sm"><div class="card-body">
+                <div class="subheader">Third-party binaries (window)</div>
+                <div class="h2 mb-0" x-text="r.hostsec.es && r.hostsec.es.active ? num(r.hostsec.es.thirdParty) : '—'"></div>
+                <div class="small text-secondary" x-text="r.hostsec.es && r.hostsec.es.active ? num(r.hostsec.es.noTeam) + ' without a Team ID · ' + (r.hostsec.es.baselineDone ? num(r.hostsec.es.newBinaries.length) + ' first seen' : 'building 24 h baseline') : ''"></div></div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card card-sm"><div class="card-body">
+                <div class="subheader">TCC.db</div>
+                <div class="h2 mb-0" x-text="r.hostsec.tccDb && r.hostsec.tccDb.available ? num(r.hostsec.tccDb.thirdParty.length) + ' high-impact' : 'no data'"></div>
+                <div class="small text-secondary" x-text="r.hostsec.tccDb && r.hostsec.tccDb.available ? num(r.hostsec.tccDb.granted) + ' grants in ' + (r.hostsec.tccDb.system ? 'system' : '') + (r.hostsec.tccDb.system && r.hostsec.tccDb.user ? ' + ' : '') + (r.hostsec.tccDb.user ? 'user' : '') + ' DB' : 'grant Full Disk Access to /usr/bin/sqlite3'"></div></div></div></div>
+              <div class="col-sm-6 col-lg-3"><div class="card card-sm"><div class="card-body">
+                <div class="subheader">Downloads (30 days)</div>
+                <div class="h2 mb-0" x-text="r.hostsec.downloads && r.hostsec.downloads.available ? num(r.hostsec.downloads.total) : 'no data'"></div>
+                <div class="small text-secondary" x-text="r.hostsec.downloads && r.hostsec.downloads.available ? num(r.hostsec.downloads.hosts.length) + ' source hosts (checked against threat intel)' : 'waits for the user collector'"></div></div></div></div>
+            </div></div>
+
+            <div class="col-12" x-show="r.hostsec.es && r.hostsec.es.active"><div class="card">
+              <div class="card-header"><h3 class="card-title">Notable Endpoint Security events</h3>
+                <div class="card-actions small text-secondary" x-text="(r.hostsec.es.eventKinds || []).map(k => k.kind + ' ' + k.n).join(' · ')"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>When</th><th>Event</th><th>Severity</th><th>Detail</th></tr></thead>
+                <tbody>
+                  <template x-for="(e, i) in (r.hostsec.es.recent || []).slice(0, 300)" :key="i"><tr><td class="small nowrap" x-text="fmt(e.ts)"></td><td class="small mono" x-text="e.kind"></td>
+                    <td><span class="badge" :class="sevBadge(e.sev)" x-text="e.sev"></span></td><td class="small mono text-break" x-text="e.summary"></td></tr></template>
+                  <tr x-show="!(r.hostsec.es.recent || []).length"><td colspan="4" class="text-secondary">Nothing notable in the window.</td></tr>
+                </tbody></table></div></div></div>
+
+            <div class="col-lg-6" x-show="r.hostsec.es && r.hostsec.es.active"><div class="card">
+              <div class="card-header"><h3 class="card-title">First-seen third-party programs</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>First run</th><th>Program</th><th>Signer</th><th>Parent</th></tr></thead>
+                <tbody>
+                  <template x-for="(b, i) in (r.hostsec.es.newBinaries || [])" :key="i"><tr><td class="small nowrap" x-text="fmt(b.first_seen)"></td><td class="small mono text-break" x-text="b.path"></td>
+                    <td class="small"><span class="badge" :class="b.team ? 'bg-green-lt' : 'bg-orange-lt'" x-text="b.team || (b.adhoc ? 'ad-hoc' : 'no Team ID')"></span></td><td class="small mono text-break" x-text="b.last_parent"></td></tr></template>
+                  <tr x-show="!(r.hostsec.es.newBinaries || []).length"><td colspan="4" class="text-secondary" x-text="r.hostsec.es.baselineDone ? 'None in the window.' : 'Learning what normally runs here (first 24 h).'"></td></tr>
+                </tbody></table></div></div></div>
+            <div class="col-lg-6" x-show="r.hostsec.es && r.hostsec.es.active"><div class="card">
+              <div class="card-header"><h3 class="card-title">Most-run third-party programs</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Program</th><th>Signer</th><th class="text-end">Runs</th><th>Last</th></tr></thead>
+                <tbody><template x-for="(b, i) in (r.hostsec.es.topThirdParty || []).slice(0, 150)" :key="i"><tr><td class="small mono text-break" x-text="b.path"></td>
+                  <td class="small" x-text="b.team || (b.adhoc ? 'ad-hoc' : 'no Team ID')"></td><td class="text-end" x-text="num(b.count)"></td><td class="small nowrap" x-text="ago(b.last_seen)"></td></tr></template></tbody></table></div></div></div>
+
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">High-impact grants (TCC.db)</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Permission</th><th>Client</th><th>DB</th><th>Modified</th></tr></thead>
+                <tbody>
+                  <template x-for="(t, i) in ((r.hostsec.tccDb && r.hostsec.tccDb.thirdParty) || [])" :key="i"><tr :class="t.recent && 'table-warning'"><td x-text="t.serviceName"></td>
+                    <td class="small mono text-break"><span x-text="t.client"></span> <span class="badge bg-secondary-lt" x-show="t.ours">Argus</span> <span class="badge bg-orange-lt" x-show="t.recent">new</span></td><td class="small" x-text="t.db"></td><td class="small nowrap" x-text="t.modified ? fmt(t.modified) : ''"></td></tr></template>
+                  <tr x-show="!(r.hostsec.tccDb && r.hostsec.tccDb.available)"><td colspan="4" class="text-secondary">No TCC.db snapshot yet (needs ./argus.sh install-telemetry and Full Disk Access for /usr/bin/sqlite3).</td></tr>
+                </tbody></table></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Background item changes</h3><div class="card-actions small text-secondary" x-show="r.hostsec.btmDiff && r.hostsec.btmDiff.available" x-text="num(r.hostsec.btmDiff.items) + ' third-party items · baseline ' + fmt(r.hostsec.btmDiff.baselineAt)"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>When</th><th>Change</th><th>Item</th><th>Executable</th></tr></thead>
+                <tbody>
+                  <template x-for="(c, i) in ((r.hostsec.btmDiff && r.hostsec.btmDiff.changes) || [])" :key="i"><tr><td class="small nowrap" x-text="fmt(c.at)"></td>
+                    <td><span class="badge" :class="c.change === 'added' || c.change === 'enabled' ? 'bg-orange-lt' : 'bg-secondary-lt'" x-text="c.change"></span></td>
+                    <td class="small"><span x-text="c.name"></span> <span class="text-secondary" x-text="c.type"></span></td><td class="small mono text-break" x-text="c.exe"></td></tr></template>
+                  <tr x-show="!((r.hostsec.btmDiff && r.hostsec.btmDiff.changes) || []).length"><td colspan="4" class="text-secondary">No changes since the baseline snapshot.</td></tr>
+                </tbody></table></div></div></div>
+
+            <div class="col-12" x-show="r.hostsec.littlesnitch && r.hostsec.littlesnitch.available"><div class="card">
+              <div class="card-header"><h3 class="card-title">Little Snitch traffic (24 h)</h3>
+                <div class="card-actions small text-secondary" x-show="r.hostsec.littlesnitch && r.hostsec.littlesnitch.totals" x-text="r.hostsec.littlesnitch ? num(r.hostsec.littlesnitch.totals.progs) + ' programs · ' + num(r.hostsec.littlesnitch.totals.c) + ' connections · ' + num(r.hostsec.littlesnitch.totals.d) + ' denied · ↑ ' + bytes(r.hostsec.littlesnitch.totals.bo) + ' ↓ ' + bytes(r.hostsec.littlesnitch.totals.bi) + ' · updated ' + ago(r.hostsec.littlesnitch.lastAt) : ''"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Program</th><th>Destinations</th><th class="text-end">Remotes</th><th class="text-end">Conns</th><th class="text-end">Denied</th><th class="text-end">Sent</th><th class="text-end">Received</th><th>Last</th></tr></thead>
+                <tbody><template x-for="(p, i) in ((r.hostsec.littlesnitch && r.hostsec.littlesnitch.programs) || []).slice(0, 200)" :key="i"><tr>
+                  <td class="small mono text-break" x-text="p.path"></td>
+                  <td class="small"><template x-for="(h, j) in p.hosts" :key="j"><a href="#" class="me-2" @click.prevent="openIndicator('domain', h)" x-text="h"></a></template></td>
+                  <td class="text-end" x-text="num(p.remotes)"></td><td class="text-end" x-text="num(p.connects)"></td><td class="text-end" :class="p.denies && 'text-orange'" x-text="num(p.denies)"></td>
+                  <td class="text-end nowrap" x-text="bytes(p.bytes_out)"></td><td class="text-end nowrap" x-text="bytes(p.bytes_in)"></td><td class="small nowrap" x-text="ago(p.last)"></td></tr></template></tbody></table></div></div></div>
+
+            <div class="col-12"><div class="card">
+              <div class="card-header"><h3 class="card-title">Programs with internet connections (24 h)</h3><div class="card-actions small text-secondary">from 5-minute connection snapshots, joined to running processes</div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Program</th><th>Signer</th><th class="text-end">Remotes</th><th>Ports</th><th>Sample</th><th>Last</th></tr></thead>
+                <tbody>
+                  <template x-for="(p, i) in ((r.hostsec.net && r.hostsec.net.programs) || []).slice(0, 200)" :key="i"><tr :class="p.flagged && 'table-danger'">
+                    <td class="small mono text-break" x-text="p.path"></td>
+                    <td class="small"><span class="badge" :class="p.platform ? 'bg-secondary-lt' : p.team ? 'bg-green-lt' : p.known ? 'bg-orange-lt' : 'bg-secondary-lt'" x-text="p.platform ? 'Apple' : p.team || (p.known ? (p.adhoc ? 'ad-hoc' : 'no Team ID') : '?')"></span></td>
+                    <td class="text-end" x-text="p.remotes"></td><td class="small" x-text="p.ports.join(', ')"></td>
+                    <td class="small mono"><template x-for="(ip, j) in p.sample" :key="j"><a href="#" class="me-2" @click.prevent="openIndicator('ip', ip)" x-text="ip"></a></template></td>
+                    <td class="small nowrap" x-text="ago(p.last)"></td></tr></template>
+                  <tr x-show="!((r.hostsec.net && r.hostsec.net.programs) || []).length"><td colspan="6" class="text-secondary">No public connections recorded yet.</td></tr>
+                </tbody></table></div></div></div>
+
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">File integrity changes</h3><div class="card-actions small text-secondary" x-show="r.hostsec.fim && r.hostsec.fim.available" x-text="num(r.hostsec.fim.watched) + ' files watched · ' + num(r.hostsec.fim.keyCount) + ' SSH keys'"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>When</th><th>Change</th><th>File</th></tr></thead>
+                <tbody>
+                  <template x-for="(c, i) in ((r.hostsec.fim && r.hostsec.fim.changes) || [])" :key="i"><tr><td class="small nowrap" x-text="fmt(c.at)"></td>
+                    <td><span class="badge" :class="sevBadge(c.sev)" x-text="c.change"></span></td>
+                    <td class="small"><span class="mono text-break" x-text="c.path"></span><div class="text-secondary text-break" x-text="c.detail"></div></td></tr></template>
+                  <tr x-show="!((r.hostsec.fim && r.hostsec.fim.changes) || []).length"><td colspan="3" class="text-secondary" x-text="r.hostsec.fim && r.hostsec.fim.available ? 'No changes since the baseline (' + fmt(r.hostsec.fim.baselineAt) + ').' : 'Waiting for the hourly snapshot.'"></td></tr>
+                </tbody></table></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Certificate trust</h3><div class="card-actions small text-secondary" x-show="r.hostsec.certs && r.hostsec.certs.available" x-text="num((r.hostsec.certs.systemCerts || []).length) + ' in System keychain'"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Certificate</th><th>Where</th><th>Trust</th></tr></thead>
+                <tbody>
+                  <template x-for="(t, i) in ((r.hostsec.certs && r.hostsec.certs.trust) || [])" :key="'t' + i"><tr><td class="small" x-text="t.name"></td><td class="small" x-text="t.domain + ' trust settings'"></td><td class="small" x-text="t.results.join(', ') || 'trusted'"></td></tr></template>
+                  <template x-for="(c, i) in ((r.hostsec.certs && r.hostsec.certs.changes) || [])" :key="'c' + i"><tr class="table-warning"><td class="small" x-text="c.name"></td><td class="small" x-text="c.kind"></td><td class="small" x-text="'new ' + fmt(c.at)"></td></tr></template>
+                  <tr x-show="!((r.hostsec.certs && r.hostsec.certs.trust) || []).length && !((r.hostsec.certs && r.hostsec.certs.changes) || []).length"><td colspan="3" class="text-secondary">No custom-trusted certificates and no changes.</td></tr>
+                </tbody></table></div></div></div>
+
+            <div class="col-12"><div class="card">
+              <div class="card-header"><h3 class="card-title">Browser extensions</h3><div class="card-actions small text-secondary" x-show="r.hostsec.extensions && r.hostsec.extensions.available" x-text="num(r.hostsec.extensions.total) + ' installed'"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Extension</th><th>Browser</th><th>Source</th><th>Access</th><th>Powers</th></tr></thead>
+                <tbody>
+                  <template x-for="(e, i) in ((r.hostsec.extensions && r.hostsec.extensions.extensions) || [])" :key="i"><tr :class="e.sideloaded ? 'table-danger' : e.isNew ? 'table-warning' : ''">
+                    <td class="small"><span x-text="e.name"></span> <span class="text-secondary" x-text="e.version"></span> <span class="badge bg-secondary-lt" x-show="!e.enabled">disabled</span> <span class="badge bg-orange-lt" x-show="e.isNew">new</span><div class="text-secondary mono" x-text="e.id"></div></td>
+                    <td class="small" x-text="e.browser + (e.profile ? ' / ' + e.profile : '')"></td>
+                    <td class="small"><span class="badge" :class="e.sideloaded ? 'bg-red-lt' : e.managed ? 'bg-azure-lt' : 'bg-secondary-lt'" x-text="e.sideloaded ? 'sideloaded' : e.managed ? 'managed' : e.locationName"></span></td>
+                    <td class="small" x-text="e.broad ? 'all sites' : (e.hosts.length ? e.hosts.length + ' site patterns' : '—')"></td>
+                    <td class="small" x-text="(e.risky || []).join(' ') || '—'"></td></tr></template>
+                  <tr x-show="!(r.hostsec.extensions && r.hostsec.extensions.available)"><td colspan="5" class="text-secondary">Waiting for the hourly user-collector run.</td></tr>
+                </tbody></table></div></div></div>
+
+            <div class="col-12"><div class="card">
+              <div class="card-header"><h3 class="card-title">Recent downloads (quarantine provenance)</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>When</th><th>By</th><th>File URL</th><th>From page</th></tr></thead>
+                <tbody>
+                  <template x-for="(d, i) in ((r.hostsec.downloads && r.hostsec.downloads.recent) || []).slice(0, 300)" :key="i"><tr><td class="small nowrap" x-text="fmt(d.ts)"></td><td class="small" x-text="d.agent"></td>
+                    <td class="small mono text-break"><a href="#" @click.prevent="d.host && openIndicator(/^[\d.]+$|:/.test(d.host) ? 'ip' : 'domain', d.host)" x-text="d.url || '—'"></a></td><td class="small mono text-break" x-text="d.origin"></td></tr></template>
+                  <tr x-show="!(r.hostsec.downloads && r.hostsec.downloads.available)"><td colspan="4" class="text-secondary">No quarantine data yet.</td></tr>
+                </tbody></table></div></div></div>
+          </div>
+          </template>
+        </div>
+
+        <!-- ============================================================ VULNERABILITIES -->
+        <div x-show="tab === 'vulns'">
+          <template x-if="!r.vulns"><div class="alert alert-info">No vulnerability data in this report yet.</div></template>
+          <template x-if="r.vulns">
+          <div class="row row-cards">
+            <div class="col-md-6 col-lg-4"><div class="card"><div class="card-body">
+              <div class="subheader">macOS</div>
+              <template x-if="r.vulns.macos && r.vulns.macos.behind && r.vulns.macos.behind.length">
+                <div><div class="h2 mb-1 text-red" x-text="r.vulns.macos.installed + ' → ' + r.vulns.macos.latest"></div>
+                  <div class="small" x-text="r.vulns.macos.behind.length + ' newer security release(s)' + ((r.vulns.macos.kev || []).length ? ' · ' + r.vulns.macos.kev.length + ' exploited CVEs (KEV) since' : '')"></div></div></template>
+              <template x-if="r.vulns.macos && r.vulns.macos.current"><div><div class="h2 mb-1 text-green" x-text="r.vulns.macos.installed"></div><div class="small text-secondary">Latest security release for this macOS line.</div></div></template>
+              <template x-if="!r.vulns.macos || (!r.vulns.macos.current && !(r.vulns.macos.behind || []).length)"><div class="small text-secondary" x-text="r.vulns.os ? 'Version ' + r.vulns.os + ': no matching row in Apple’s index yet' : 'Waiting for the posture snapshot'"></div></template>
+            </div></div></div>
+            <div class="col-md-6 col-lg-4"><div class="card"><div class="card-body">
+              <div class="subheader">Apps vs CISA KEV</div>
+              <div class="h2 mb-1" x-text="r.vulns.apps && r.vulns.apps.scanned ? (r.vulns.apps.kev || []).filter(a => a.after.length).length + ' likely unpatched' : 'no inventory yet'"></div>
+              <div class="small text-secondary" x-text="r.vulns.apps && r.vulns.apps.scanned ? num(r.vulns.apps.total) + ' third-party apps · ' + (r.vulns.apps.kev || []).length + ' match KEV products' : 'system_profiler runs every 6 h from the user collector'"></div>
+            </div></div></div>
+            <div class="col-md-6 col-lg-4"><div class="card"><div class="card-body">
+              <div class="subheader">Homebrew</div>
+              <div class="h2 mb-1" x-text="r.vulns.brew && r.vulns.brew.packages ? r.vulns.brew.packages.filter(p => p.vulns.length).length + ' packages with advisories' : '—'"></div>
+              <div class="small text-secondary" x-text="r.vulns.brew ? r.vulns.brew.source : ''"></div>
+            </div></div></div>
+
+            <div class="col-12" x-show="r.vulns.macos && (r.vulns.macos.behind || []).length"><div class="card">
+              <div class="card-header"><h3 class="card-title">macOS security releases you don't have</h3></div>
+              <div class="table-responsive"><table class="table table-sm card-table"><thead><tr><th>Release</th><th>Date</th><th>Notes</th></tr></thead>
+                <tbody>
+                  <template x-for="(b, i) in ((r.vulns.macos && r.vulns.macos.behind) || [])" :key="i"><tr><td><a :href="b.link" target="_blank" rel="noopener" x-show="b.link" x-text="'macOS ' + b.version"></a><span x-show="!b.link" x-text="'macOS ' + b.version"></span></td><td class="small" x-text="fmt(b.date)"></td><td class="small" x-text="b.noCves ? 'no published CVEs' : ''"></td></tr></template>
+                  <template x-for="(k, i) in ((r.vulns.macos && r.vulns.macos.kev) || [])" :key="'k' + i"><tr class="table-danger"><td class="mono small" x-text="k.cve"></td><td class="small" x-text="k.added"></td><td class="small" x-text="k.name"></td></tr></template>
+                </tbody></table></div></div></div>
+
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Installed apps with known-exploited CVEs</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table"><thead><tr><th>App</th><th>Version</th><th>Updated</th><th class="text-end">KEV (1 y)</th><th>Since update</th></tr></thead>
+                <tbody>
+                  <template x-for="(a, i) in ((r.vulns.apps && r.vulns.apps.kev) || [])" :key="i"><tr :class="a.after.length && 'table-danger'"><td x-text="a.app"></td><td class="small" x-text="a.version"></td><td class="small nowrap" x-text="a.modified ? fmt(a.modified) : '?'"></td>
+                    <td class="text-end" x-text="a.recent"></td><td class="small mono" x-text="a.after.map(k => k.cve).join(', ') || '—'"></td></tr></template>
+                  <tr x-show="!((r.vulns.apps && r.vulns.apps.kev) || []).length"><td colspan="5" class="text-secondary">No installed app matches a KEV product.</td></tr>
+                </tbody></table></div></div></div>
+            <div class="col-lg-6"><div class="card">
+              <div class="card-header"><h3 class="card-title">Homebrew advisories</h3></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table"><thead><tr><th>Package</th><th>Version</th><th>Advisories</th></tr></thead>
+                <tbody>
+                  <template x-for="(p, i) in ((r.vulns.brew && r.vulns.brew.packages) || []).filter(p => p.vulns.length)" :key="i"><tr><td class="mono" x-text="p.name"></td><td class="small" x-text="p.version"></td>
+                    <td class="small"><template x-for="(v, j) in p.vulns.slice(0, 12)" :key="j"><span class="badge me-1 mb-1" :class="v.kev ? 'bg-red text-red-fg' : /CRITICAL|HIGH/.test(v.severity) ? 'bg-red-lt' : /MEDIUM|MODERATE/.test(v.severity) ? 'bg-orange-lt' : 'bg-secondary-lt'" :title="v.summary" x-text="v.id + (v.severity ? ' ' + v.severity.toLowerCase() : '')"></span></template></td></tr></template>
+                  <tr x-show="!((r.vulns.brew && r.vulns.brew.packages) || []).filter(p => p.vulns.length).length"><td colspan="3" class="text-secondary" x-text="r.vulns.brew ? r.vulns.brew.source : ''"></td></tr>
+                </tbody></table></div></div></div>
+
+            <div class="col-12" x-show="(r.vulns.pendingUpdates || []).length"><div class="card">
+              <div class="card-header"><h3 class="card-title">Pending Apple updates</h3></div>
+              <div class="list-group list-group-flush small"><template x-for="(u, i) in (r.vulns.pendingUpdates || [])" :key="i"><div class="list-group-item" x-text="u.title + ' ' + u.version + (u.recommended ? ' · recommended' : '') + (u.restart ? ' · needs restart' : '')"></div></template></div></div></div>
+
+            <div class="col-12"><div class="card"><div class="card-body small text-secondary">
+              Data: CISA KEV <span x-text="r.vulns.kev && r.vulns.kev.updated ? '(' + num(r.vulns.kev.count) + ' entries, ' + ago(r.vulns.kev.updated) + ')' : (r.vulns.kev && r.vulns.kev.error ? '— ' + r.vulns.kev.error : '— not fetched yet')"></span> ·
+              Apple security releases <span x-text="r.vulns.apple && r.vulns.apple.updated ? '(' + ago(r.vulns.apple.updated) + ')' : (r.vulns.apple && r.vulns.apple.error ? '— ' + r.vulns.apple.error : '— not fetched yet')"></span> ·
+              OSV.dev <span x-text="r.vulns.osv && r.vulns.osv.updated ? '(' + ago(r.vulns.osv.updated) + ')' : (r.vulns.osv && r.vulns.osv.error ? '— ' + r.vulns.osv.error : '— only used when brew vulns is unavailable')"></span>.
+              App matching is by product name and by when the app bundle last changed on disk, so treat "likely unpatched" as a prompt to check the app's version, not proof.
+            </div></div></div>
+          </div>
+          </template>
+        </div>
+
         <!-- ============================================================ SOURCES -->
         <div x-show="tab === 'sources'" class="row row-cards">
           <div class="col-lg-6"><div class="card">
@@ -515,6 +724,10 @@
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">Host collector</strong><span class="badge" :class="collectorFresh() ? 'bg-green-lt' : 'bg-orange-lt'" x-text="collectorFresh() ? 'reporting' : 'stale or not installed'"></span></div>
                 <div class="text-secondary" x-text="'last unified-log batch ' + ago(r.inputs.collector.lastFileAt || (r.inputs.collector.meta.system_last_run ? r.inputs.collector.meta.system_last_run * 1000 : null)) + ' · ' + num(r.inputs.collector.inboxFiles) + ' batches in inbox · ' + num(r.inputs.collector.events) + ' events in the ' + r.inputs.collector.windowHours + ' h window'"></div>
                 <div class="text-secondary" x-show="r.inputs.collector.meta.version" x-text="'collector ' + r.inputs.collector.meta.version + ' · system run ' + ago((r.inputs.collector.meta.system_last_run || 0) * 1000) + ' · user run ' + ago((r.inputs.collector.meta.user_last_run || 0) * 1000)"></div></div>
+              <div class="list-group-item" x-show="r.inputs.collector.hostsec"><div class="d-flex"><strong class="flex-fill">Endpoint Security (eslogger)</strong><span class="badge" :class="r.inputs.collector.hostsec && r.inputs.collector.hostsec.lastFileAt && Date.now() - r.inputs.collector.hostsec.lastFileAt < 900e3 ? 'bg-green-lt' : 'bg-orange-lt'" x-text="r.inputs.collector.hostsec && r.inputs.collector.hostsec.esSince ? (Date.now() - r.inputs.collector.hostsec.lastFileAt < 900e3 ? 'reporting' : 'stale') : 'not installed'"></span></div>
+                <div class="text-secondary" x-text="r.inputs.collector.hostsec ? num(r.inputs.collector.hostsec.esEvents) + ' events in ' + num(r.inputs.collector.hostsec.esFiles) + ' chunks · last ' + ago(r.inputs.collector.hostsec.lastFileAt) + ' · TCC.db ' + ago(r.inputs.collector.hostsec.tccDb.system) + ' · downloads ' + ago(r.inputs.collector.hostsec.quarantine) + ' · app inventory ' + ago(r.inputs.collector.hostsec.inventory) : ''"></div></div>
+              <div class="list-group-item" x-show="r.inputs.collector.vulns"><div class="d-flex"><strong class="flex-fill">Vulnerability data</strong><span class="badge" :class="r.inputs.collector.vulns && (r.inputs.collector.vulns.kev.error || r.inputs.collector.vulns.apple.error) ? 'bg-red-lt' : 'bg-green-lt'" x-text="r.inputs.collector.vulns && (r.inputs.collector.vulns.kev.error || r.inputs.collector.vulns.apple.error) ? 'error' : 'ok'"></span></div>
+                <div class="text-secondary" x-text="r.inputs.collector.vulns ? 'CISA KEV ' + (r.inputs.collector.vulns.kev.error || ago(r.inputs.collector.vulns.kev.updated)) + ' · Apple releases ' + (r.inputs.collector.vulns.apple.error || ago(r.inputs.collector.vulns.apple.updated)) + ' · OSV ' + (r.inputs.collector.vulns.osv.error || ago(r.inputs.collector.vulns.osv.updated)) : ''"></div></div>
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">Pi-hole API</strong><span class="badge" :class="!r.inputs.pihole.configured ? 'bg-secondary-lt' : r.inputs.pihole.error ? 'bg-red-lt' : 'bg-green-lt'" x-text="!r.inputs.pihole.configured ? 'not configured' : r.inputs.pihole.error ? 'error' : 'ok'"></span></div>
                 <div class="text-secondary" x-text="r.inputs.pihole.configured ? (r.inputs.pihole.url + ' · polled ' + ago(r.inputs.pihole.lastPoll) + (r.inputs.pihole.error ? ' · ' + r.inputs.pihole.error : '')) : 'Set PIHOLE_URL and PIHOLE_PASSWORD'"></div></div>
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">IntelOwl</strong><span class="badge" :class="r.inputs.intelowl.configured ? 'bg-green-lt' : 'bg-secondary-lt'" x-text="r.inputs.intelowl.configured ? 'configured' : 'not configured'"></span></div>
@@ -608,7 +821,7 @@ function argus() {
     fSev: ['high', 'medium', 'low'], fArea: '', fQ: '', fLimit: 100,
     ind: { total: 0, rows: [] }, iRisk: 'flagged', iType: '', iSource: '', iQ: '', iOffset: 0,
     detail: null, lookupQ: '', lookupBusy: false, lookupErr: '',
-    hideCollector: true, thirdPartyTcc: true, showScans: false,
+    hideCollector: true, showPassing: false, thirdPartyTcc: true, showScans: false,
     macTabs: [{ id: 'access', label: 'Access' }, { id: 'permissions', label: 'Permissions & Gatekeeper' }, { id: 'persistence', label: 'Persistence' },
       { id: 'network', label: 'Network' }, { id: 'crashes', label: 'Crashes' }, { id: 'system', label: 'System' }],
     get tabs() {
@@ -619,6 +832,8 @@ function argus() {
         { id: 'indicators', label: 'Indicators', icon: 'ti-fingerprint', badge: () => r && ((r.intel.malicious || 0) + (r.intel.suspicious || 0)) || '', badgeClass: () => r && r.intel.malicious ? 'bg-red-lt' : 'bg-orange-lt' },
         { id: 'crowdsec', label: 'CrowdSec', icon: 'ti-shield-half', badge: () => r && r.crowdsec.alerts.length || '' },
         { id: 'macos', label: 'macOS', icon: 'ti-device-laptop' },
+        { id: 'endpoint', label: 'Endpoint', icon: 'ti-cpu', badge: () => r && r.hostsec && r.hostsec.es && r.hostsec.es.recent ? r.hostsec.es.recent.filter(e => e.sev === 'high').length || '' : '', badgeClass: () => 'bg-red-lt' },
+        { id: 'vulns', label: 'Vulnerabilities', icon: 'ti-bug', badge: () => r && r.findings ? r.findings.filter(f => f.area === 'Vulnerabilities' && (f.sev === 'high' || f.sev === 'medium')).length || '' : '', badgeClass: () => 'bg-orange-lt' },
         { id: 'dns', label: 'DNS', icon: 'ti-world-search' },
         { id: 'syslog', label: 'Syslog', icon: 'ti-server-2', badge: () => r && r.syslog.hosts.length || '' },
         { id: 'sources', label: 'Sources & feeds', icon: 'ti-plug-connected' },

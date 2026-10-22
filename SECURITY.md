@@ -43,6 +43,31 @@ folders it lists and reinstall with `./argus.sh install-collector`.
 [docs/INSTALL.md](docs/INSTALL.md) describes each install step and what it
 changes on the Mac.
 
+**Optional endpoint telemetry** (`./argus.sh install-telemetry`) adds two
+root LaunchDaemons that run Apple binaries directly, `/usr/bin/eslogger` and
+`/usr/bin/sqlite3`, and both need Full Disk Access. launchd makes each binary
+its own "responsible process", so the grant covers those two programs only,
+not bash, Terminal or the collector script. Either one, started as root, can
+read anything on the disk; using the grant still needs root, because only root
+can create a LaunchDaemon. No script is involved, so there is nothing for a
+non-root account to swap out. Remove both from Full Disk Access when you
+uninstall.
+
+### What the inbox holds
+
+The 1.2.0 telemetry puts more sensitive material in the inbox (root and your
+account only):
+
+- **Process launches with full command lines** (Endpoint Security). A password
+  or token passed as a command argument by any process ends up here, the same
+  caveat as sudo logging but for every program.
+- The permission (TCC) grants on record, download URLs from the quarantine
+  database, browser extension IDs and permissions, certificate names from the
+  System and login keychains (names and hashes only, never private keys),
+  per-program network destinations from Little Snitch, and hashes and SSH key
+  fingerprints for the watched files. The watched files' contents are never
+  copied, only hashed.
+
 The unified log itself cannot be parsed by a Linux container (it's a binary
 store only macOS's own `log` tool understands), which is the entire reason
 the root collector exists: it's the only process with the privilege and the
@@ -53,10 +78,23 @@ tooling to read it, and it exports a filtered slice, not the raw store.
 Nothing Argus does requires cloud infrastructure of its own, but several
 pieces legitimately make outbound calls once configured:
 
-**Threat feed downloads** (pulling data in, no indicators sent out): HaGeZi,
-FireHOL, IPsum, Spamhaus DROP, Emerging Threats, CINS, blocklist.de,
-OpenPhish, and abuse.ch's Feodo/URLhaus/ThreatFox lists. These are plain
-GET requests for public blocklists.
+**Threat feed downloads** (pulling data in, no indicators sent out): HaGeZi
+(threat intelligence from GitHub; newly registered and DGA domains from
+cdn.jsdelivr.net), FireHOL, IPsum, Spamhaus DROP, Emerging Threats, CINS,
+blocklist.de, OpenPhish, the Tor Project's exit list, DShield's block list,
+and abuse.ch's Feodo/URLhaus/ThreatFox lists. These are plain GET requests
+for public blocklists.
+
+**Vulnerability data** (pulling data in): CISA's KEV catalog
+(cisa.gov) and Apple's security-release index (support.apple.com), twice a
+day. Nothing about your Mac is sent.
+
+**Homebrew advisories** are checked by `brew vulns` on the Mac, which
+fetches Homebrew's advisory database. Only when `brew vulns` isn't available
+does the container fall back to OSV.dev, and then it **sends the source
+repository URL and installed version of each Homebrew formula** you have
+installed (one batch a day, plus detail lookups for any advisories found).
+Upgrade Homebrew to 6.0.11 or later to keep that inventory local.
 
 **CrowdSec**, if `DISABLE_ONLINE_API=false` (the default), talks to
 `version.crowdsec.net` and the CrowdSec hub for collection updates, and
@@ -80,6 +118,7 @@ looked up:
 | GreyNoise Community | IP | `GREYNOISE_KEY` |
 | VirusTotal | IP/domain | `VT_API_KEY` |
 | AlienVault OTX | IP/domain | `OTX_API_KEY` |
+| urlscan.io (search only, nothing is submitted for scanning) | IP/domain | `URLSCAN_API_KEY` |
 | abuse.ch URLhaus / ThreatFox | domain | `ABUSECH_AUTH_KEY` |
 | IntelOwl | IP/domain (to **your own** local instance) | `INTELOWL_TOKEN` |
 
@@ -90,8 +129,8 @@ tiers and to limit how much indicator data reasonably leaves the Mac per day.
 
 To cut outbound traffic as far as current settings allow, set every
 `*_KEY`/`*_TOKEN` blank, set `DISABLE_ONLINE_API=true`, `ARGUS_RDAP_DAILY=0`
-and `INTELOWL_AUTO=0`, and list the feeds you don't want fetched in
-`ARGUS_FEEDS_DISABLE`. Shodan InternetDB lookups for public IPs currently have
+and `INTELOWL_AUTO=0`, list the feeds you don't want fetched in
+`ARGUS_FEEDS_DISABLE`, and set `ARGUS_NRD_LISTS=none`. Shodan InternetDB lookups for public IPs currently have
 no off switch, so Argus is not fully offline even then. The macOS log
 analysis, CrowdSec's already-installed scenarios, and Pi-hole/syslog
 ingestion keep working without any of the above.
@@ -131,6 +170,22 @@ settings without touching your admin login.
 - `npm ci --omit=dev` is run at build time from the checked-in
   `package-lock.json`, so Node dependency versions are pinned and
   reproducible as long as the lockfile is kept up to date.
+
+## Data source terms
+
+Argus downloads every feed at runtime and stores nothing from them in this
+repository. Check each source's terms against how you use Argus, especially
+at work:
+
+- **HaGeZi** lists are GPL-3.0.
+- **DShield** data is CC BY-NC-SA (non-commercial). Add `dshield_block` to
+  `ARGUS_FEEDS_DISABLE` for commercial use.
+- **CISA KEV** is US government work, free to use.
+- **Apple's security-release page** is read as a web page; Argus keeps only
+  release names, versions and dates.
+- **OSV.dev** data carries per-source licenses (mostly CC-BY 4.0).
+- **urlscan.io** and the other keyed providers have their own API terms tied
+  to your account.
 
 ## Reporting a problem
 

@@ -10,6 +10,8 @@
 #   ./argus.sh up | down | restart  start / stop the container
 #   ./argus.sh install-collector    install the root LaunchDaemon + your LaunchAgent
 #   ./argus.sh uninstall-collector
+#   ./argus.sh install-telemetry    eslogger + TCC.db LaunchDaemons (then grant Full Disk Access)
+#   ./argus.sh uninstall-telemetry | telemetry-status
 #   ./argus.sh status | logs | shell | open    (open signs the browser in with ARGUS_TOKEN)
 #   ./argus.sh cscli <args>         run cscli inside the container
 #   ./argus.sh stream on|off|status live-stream this Mac's logs to the syslog listener
@@ -198,10 +200,11 @@ cmd_init() {
     ask VT_API_KEY "VirusTotal key" "free: virustotal.com > your profile > API key" secret
     ask OTX_API_KEY "AlienVault OTX key" "free: otx.alienvault.com > Settings > API key" secret
     ask GREYNOISE_KEY "GreyNoise key" "free Community key: viz.greynoise.io > Account > API key" secret
+    ask URLSCAN_API_KEY "urlscan.io key" "free: urlscan.io > Settings & API > API keys (looks up flagged domains/IPs for malicious scan verdicts)" secret
     echo
   fi
 
-  for k in PIHOLE_PASSWORD INTELOWL_TOKEN ENROLL_KEY ABUSECH_AUTH_KEY CROWDSEC_CTI_KEY ABUSEIPDB_KEY VT_API_KEY OTX_API_KEY GREYNOISE_KEY; do
+  for k in PIHOLE_PASSWORD INTELOWL_TOKEN ENROLL_KEY ABUSECH_AUTH_KEY CROWDSEC_CTI_KEY ABUSEIPDB_KEY VT_API_KEY OTX_API_KEY GREYNOISE_KEY URLSCAN_API_KEY; do
     [ -n "$(env_val "$k")" ] && set_list="$set_list $k"
   done
   ok "Argus home: $ARGUS_HOME"
@@ -392,11 +395,12 @@ cmd_install_collector() {
   install_root_script "$REPO/collector/argus-collect.sh" argus-collect.sh "$DAEMON_LABEL"
 
   log "preparing inbox $inbox"
-  sudo mkdir -p "$inbox/unified" "$inbox/snapshots" "$inbox/crash" "$inbox/.state" "$inbox/user" "$inbox/containers" "$inbox/apps"
-  sudo chown root:wheel "$(dirname "$inbox")" "$inbox" "$inbox/unified" "$inbox/snapshots" "$inbox/crash" "$inbox/.state"
+  local spool; spool="$(dirname "$inbox")/spool"
+  sudo mkdir -p "$inbox/unified" "$inbox/snapshots" "$inbox/crash" "$inbox/.state" "$inbox/user" "$inbox/containers" "$inbox/apps" "$inbox/es" "$inbox/ls" "$spool"
+  sudo chown root:wheel "$(dirname "$inbox")" "$inbox" "$inbox/unified" "$inbox/snapshots" "$inbox/crash" "$inbox/.state" "$inbox/es" "$inbox/ls" "$spool"
   sudo chown "$me":staff "$inbox/user" "$inbox/containers" "$inbox/apps"
-  sudo chmod 0755 "$(dirname "$inbox")" "$inbox" "$inbox/unified" "$inbox/snapshots" "$inbox/crash" "$inbox/user" "$inbox/containers" "$inbox/apps"
-  sudo chmod 0700 "$inbox/.state"
+  sudo chmod 0755 "$(dirname "$inbox")" "$inbox" "$inbox/unified" "$inbox/snapshots" "$inbox/crash" "$inbox/user" "$inbox/containers" "$inbox/apps" "$inbox/es" "$inbox/ls"
+  sudo chmod 0700 "$inbox/.state" "$spool"
   # Lock the inbox to root and you. The folder itself is root-only (0700), and a
   # single ACL entry lets your account list and enter it. Any other account stops
   # at this folder, whatever the modes of the files inside. The container reads
@@ -416,7 +420,7 @@ cmd_install_collector() {
   <key>ProgramArguments</key>
   <array><string>/bin/bash</string><string>$LIBEXEC/argus-collect.sh</string><string>system</string></array>
   <key>EnvironmentVariables</key>
-  <dict><key>ARGUS_INBOX</key><string>$inbox</string><key>ARGUS_USER</key><string>$me</string></dict>
+  <dict><key>ARGUS_INBOX</key><string>$inbox</string><key>ARGUS_USER</key><string>$me</string><key>ARGUS_SPOOL</key><string>$spool</string></dict>
   <key>StartInterval</key><integer>300</integer>
   <key>RunAtLoad</key><true/>
   <key>ProcessType</key><string>Background</string>
@@ -465,6 +469,126 @@ cmd_uninstall_collector() {
   sudo rm -f "$DAEMON_PLIST"; rm -f "$AGENT_PLIST"
   sudo rm -rf "$LIBEXEC"
   ok "collector removed (inbox left in place; delete it yourself if you want)"
+}
+
+# ------------------------------------------------- extra telemetry
+# eslogger and sqlite3 are launched directly by launchd so each is its own
+# "responsible process" for TCC: Full Disk Access is granted to those two Apple
+# binaries only (not to bash or Terminal). Without the grant they fail closed.
+ES_WANT="exec btm_launch_item_add btm_launch_item_remove authentication xp_malware_detected xp_malware_remediated sudo su profile_add profile_remove tcc_modify openssh_login screensharing_attach login_login"
+
+cmd_install_telemetry() {
+  [ -f "$ENV_FILE" ] || die "run ./argus.sh init first"
+  local inbox me home avail ev events=() xml=""
+  inbox="$(env_val ARGUS_INBOX /Users/Shared/Argus/inbox)"; me="$(id -un)"; home="$HOME"
+  local SPOOL; SPOOL="$(dirname "$inbox")/spool"
+  [ -d "$inbox/snapshots" ] || die "install the collector first: ./argus.sh install-collector"
+  avail="$(/usr/bin/eslogger --list-events 2>/dev/null || true)"
+  for ev in $(env_val ARGUS_ES_EVENTS "$ES_WANT"); do
+    if printf '%s\n' "$avail" | grep -qx "$ev"; then events+=("$ev"); else warn "eslogger on this macOS has no '$ev' event; skipping it"; fi
+  done
+  [ "${#events[@]}" -gt 0 ] || die "eslogger offered none of the wanted events"
+  for ev in "${events[@]}"; do xml="$xml<string>$ev</string>"; done
+
+  log "writing $ES_PLIST (events: ${events[*]})"
+  sudo mkdir -p "$SPOOL"; sudo chown root:wheel "$SPOOL"; sudo chmod 0700 "$SPOOL"
+  sudo tee "$ES_PLIST" >/dev/null <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$ES_LABEL</string>
+  <key>ProgramArguments</key>
+  <array><string>/usr/bin/eslogger</string><string>--format</string><string>json</string>$xml</array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>60</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>Nice</key><integer>5</integer>
+  <key>Umask</key><integer>63</integer>
+  <key>StandardOutPath</key><string>$SPOOL/es.ndjson</string>
+  <key>StandardErrorPath</key><string>/var/log/argus-eslogger.log</string>
+</dict>
+</plist>
+PLIST
+  sudo chown root:wheel "$ES_PLIST"; sudo chmod 0644 "$ES_PLIST"
+  sudo launchctl bootout "system/$ES_LABEL" >/dev/null 2>&1 || true
+  sudo launchctl bootstrap system "$ES_PLIST"
+
+  log "writing $TCC_PLIST (hourly read-only copy of the system and your TCC.db)"
+  local q="SELECT service, client, client_type, auth_value, auth_reason, last_modified, IFNULL(indirect_object_identifier,'') FROM access;"
+  # Per-user TCC.db only exists on some macOS releases; include it only when present.
+  local udb="$home/Library/Application Support/com.apple.TCC/TCC.db" user_xml=""
+  if sudo test -f "$udb"; then
+    user_xml="    <string>-cmd</string><string>.open --readonly '$udb'</string>
+    <string>-cmd</string><string>.output '$inbox/snapshots/tcc-user.tsv'</string>
+    <string>-cmd</string><string>$q</string>"
+  else
+    warn "no per-user TCC.db on this macOS; reading the system database only"
+    sudo rm -f "$inbox/snapshots/tcc-user.tsv"
+  fi
+  sudo tee "$TCC_PLIST" >/dev/null <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$TCC_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/sqlite3</string><string>-batch</string>
+    <string>-cmd</string><string>.mode tabs</string>
+    <string>-cmd</string><string>.open --readonly '/Library/Application Support/com.apple.TCC/TCC.db'</string>
+    <string>-cmd</string><string>.output '$inbox/snapshots/tcc-system.tsv'</string>
+    <string>-cmd</string><string>$q</string>
+$user_xml
+    <string>-cmd</string><string>.output stdout</string>
+  </array>
+  <key>StartInterval</key><integer>3600</integer>
+  <key>RunAtLoad</key><true/>
+  <key>ProcessType</key><string>Background</string>
+  <key>Umask</key><integer>18</integer>
+  <key>StandardInPath</key><string>/dev/null</string>
+  <key>StandardOutPath</key><string>/var/log/argus-tcc.log</string>
+  <key>StandardErrorPath</key><string>/var/log/argus-tcc.log</string>
+</dict>
+</plist>
+PLIST
+  sudo chown root:wheel "$TCC_PLIST"; sudo chmod 0644 "$TCC_PLIST"
+  sudo launchctl bootout "system/$TCC_LABEL" >/dev/null 2>&1 || true
+  sudo launchctl bootstrap system "$TCC_PLIST"
+
+  ok "installed. Now grant Full Disk Access (System Settings > Privacy & Security > Full Disk Access > +,"
+  echo "    then Cmd-Shift-G) to exactly these two Apple binaries:"
+  echo "      /usr/bin/eslogger"
+  echo "      /usr/bin/sqlite3"
+  echo "    then: sudo launchctl kickstart -k system/$ES_LABEL && sudo launchctl kickstart -k system/$TCC_LABEL"
+  echo "    check: ./argus.sh telemetry-status"
+}
+
+cmd_uninstall_telemetry() {
+  local SPOOL; SPOOL="$(dirname "$(env_val ARGUS_INBOX /Users/Shared/Argus/inbox)")/spool"
+  log "removing eslogger + TCC jobs"
+  sudo launchctl bootout "system/$ES_LABEL" >/dev/null 2>&1 || true
+  sudo launchctl bootout "system/$TCC_LABEL" >/dev/null 2>&1 || true
+  sudo rm -f "$ES_PLIST" "$TCC_PLIST"
+  ok "removed (spool $SPOOL left in place; remove the two Full Disk Access entries yourself)"
+}
+
+cmd_telemetry_status() {
+  local inbox SPOOL; inbox="$(env_val ARGUS_INBOX /Users/Shared/Argus/inbox)"; SPOOL="$(dirname "$inbox")/spool"
+  if [ -f "$ES_PLIST" ]; then
+    ok "eslogger job installed"
+    sudo -n tail -n 3 /var/log/argus-eslogger.log 2>/dev/null | sed 's/^/      /'
+    sudo -n ls -la "$SPOOL" 2>/dev/null | sed 's/^/      /' || echo "      (spool listing needs sudo)"
+    echo "    es chunks: $(find "$inbox/es" -name '*.ndjson' 2>/dev/null | wc -l | tr -d ' ')"
+  else warn "eslogger job not installed"; fi
+  if [ -f "$TCC_PLIST" ]; then
+    ok "TCC job installed"
+    for f in tcc-system.tsv tcc-user.tsv; do
+      if [ "$f" = tcc-user.tsv ] && [ ! -e "$inbox/snapshots/$f" ]; then echo "    $f: not used (no per-user TCC.db on this macOS)"; continue; fi
+      if [ -s "$inbox/snapshots/$f" ]; then echo "    $f: $(wc -l < "$inbox/snapshots/$f" | tr -d ' ') rows"; else warn "$f empty: sqlite3 lacks Full Disk Access?"; fi
+    done
+  else warn "TCC job not installed"; fi
 }
 
 # ------------------------------------------------------------- live stream
@@ -611,6 +735,9 @@ case "${1:-}" in
   cscli) shift; cmd_cscli "$@" ;;
   open) cmd_open ;;
   install-collector) cmd_install_collector ;;
+  install-telemetry) cmd_install_telemetry ;;
+  uninstall-telemetry) cmd_uninstall_telemetry ;;
+  telemetry-status) cmd_telemetry_status ;;
   uninstall-collector) cmd_uninstall_collector ;;
   stream) shift; cmd_stream "$@" ;;
   syslog-test) cmd_syslog_test ;;

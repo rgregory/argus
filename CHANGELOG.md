@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.2.0 (2026-10-21)
+
+### Added
+
+- **Endpoint tab.** A new dashboard tab for what the Mac is doing, not just what it logs:
+  - **Endpoint Security events** from `eslogger`: process launches, background items being registered, authentication, XProtect detections and removals, sudo and su, configuration profiles, TCC changes, SSH and Screen Sharing logins. Findings cover suspicious command lines (pipe-to-shell, decoded payloads, reverse shells, quarantine removal, Gatekeeper or SIP being switched off, Office/browser/chat apps starting shells), programs launched from temp or hidden folders, and third-party programs running for the first time after a 24-hour baseline.
+  - **TCC database**: an hourly, read-only copy of the system permission database. Flags new high-impact grants and grants held by programs in odd locations.
+  - **Background-item changes**: each `sfltool dumpbtm` snapshot is compared with the last; additions and removals are listed for 7 days.
+  - **Programs with internet connections**: connections joined to the process that made them, with signer, and a finding when one talks to a flagged address.
+  - **Little Snitch traffic** when Little Snitch is installed and "Allow access via Terminal" is on: per-program destinations, bytes, denied attempts, accepted inbound connections and large uploads.
+  - **File integrity**: hourly hashes of SSH authorized keys (with key fingerprints), sudoers, PAM, sshd config, authorization plugins, login and logout hooks, the hosts file, scheduled scripts and shell startup files.
+  - **Browser extensions** for Chrome, Brave, Edge, Arc, Vivaldi, Opera, Firefox and Safari: sideloaded or unsigned extensions, new extensions, and ones with all-sites access plus powerful permissions.
+  - **Certificate trust**: new certificates in the System keychain and new admin or user trust settings (a newly trusted root is rated high).
+  - **Download provenance** from the quarantine database, with download hosts sent through threat intel.
+- **Vulnerabilities tab.** macOS and Safari versions against Apple's security-release index, with CISA's Known Exploited Vulnerabilities (KEV) catalog showing which missing fixes are being exploited; installed apps matched to KEV products and flagged when KEV gained entries after the app last changed; pending Apple updates; and Homebrew advisories from `brew vulns` (Homebrew 6.0.11+), falling back to OSV.dev.
+- `./argus.sh install-telemetry`, `uninstall-telemetry` and `telemetry-status` for the two optional jobs that need Full Disk Access: `eslogger` and the TCC reader. They're separate from `install-collector`, so Argus works without them.
+- Feeds: HaGeZi newly registered domains (`nrd7` and `nrd14-8`, about 5.7 million domains held as hashes, roughly 50 MB of RAM), HaGeZi DGA domains (14 days), the Tor exit list and DShield's top attacking /24s.
+- urlscan.io as an enrichment provider (`URLSCAN_API_KEY`); `./argus.sh init` asks for the key.
+- Posture: automatic login, guest account, Screen Sharing, File Sharing, Remote Apple Events and XProtect bundle age.
+- Password failures from `opendirectoryd` and `loginwindow` in the unified-log slice.
+- The Posture card hides passing checks behind a "Show N passing checks" link.
+- The smoke test covers the new refresh endpoint and the new report sections.
+
+### Security
+
+- After signing in with `?token=`, the dashboard always redirects to its home page instead of echoing the requested path, which a link like `//other-site` or `/\other-site` could turn into an open redirect. Thanks to the Sentinel report for spotting the first form.
+- The dashboard sends `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`, so other pages can't frame it.
+
+### Changed
+
+- The unified-log filter no longer includes Little Snitch's own log messages; its traffic history comes from its command-line tool instead.
+
+### Upgrading from 1.1.0
+
+`git pull`, then `./argus.sh install-collector`, `./argus.sh build` and `./argus.sh restart`. `./argus.sh install-telemetry` is optional; see [Endpoint telemetry](docs/INSTALL.md#endpoint-telemetry-optional).
+
 ## 1.1.0 (2026-10-20)
 
 ### Security

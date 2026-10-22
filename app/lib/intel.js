@@ -9,7 +9,7 @@ const log = logger('intel');
 const D = 86400e3;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const SOURCE_PRIORITY = { manual: 3, ssh: 2, screensharing: 2, firewall: 2, 'dns-heuristic': 2, connection: 1, resolved: 1, syslog: 1, dns: 0 };
+const SOURCE_PRIORITY = { manual: 3, ssh: 2, screensharing: 2, firewall: 2, 'dns-heuristic': 2, download: 2, connection: 1, resolved: 1, syslog: 1, dns: 0 };
 const srcPrio = s => SOURCE_PRIORITY[s] ?? SOURCE_PRIORITY[String(s).split(':')[0]] ?? 0;
 const verdictScore = { malicious: 80, suspicious: 50 };
 
@@ -77,6 +77,18 @@ function providers(self) {
         const p = r.json.pulse_info || {}, n = p.count || 0;
         return { verdict: n ? 'suspicious' : 'clean', score: n >= 3 ? 55 : n ? 40 : 0, summary: n ? `${n} OTX pulses: ${(p.pulses || []).slice(0, 3).map(x => x.name).join('; ')}` : 'no OTX pulses',
           link: `https://otx.alienvault.com/indicator/${t === 'domain' ? 'domain' : 'ip'}/${v}` };
+      } },
+    { id: 'urlscan', name: 'urlscan.io', types: ['domain', 'ip'], ttl: 1 * D, daily: +process.env.URLSCAN_DAILY || 300, gap: 2500, minPriority: 2, enabled: () => !!k.urlscan,
+      run: async (v, t) => {
+        const q = `${t === 'ip' ? 'page.ip' : 'page.domain'}:"${v}" AND verdicts.malicious:true`;
+        const r = await fetchJson(`https://urlscan.io/api/v1/search/?q=${encodeURIComponent(q)}&size=10`, { headers: { 'API-Key': k.urlscan, Accept: 'application/json' }, timeout: 20000 });
+        if (r.status === 429) throw new Error('rate limited (429)');
+        if (!r.ok || !r.json) throw new Error(`HTTP ${r.status}`);
+        const n = r.json.total || (r.json.results || []).length || 0;
+        const last = (r.json.results || [])[0];
+        return { verdict: n >= 2 ? 'malicious' : n ? 'suspicious' : 'unknown', score: n >= 2 ? 80 : n ? 55 : 0,
+          summary: n ? `${n} scan(s) with a malicious verdict${last && last.task ? `; latest ${String(last.task.time || '').slice(0, 10)} ${last.page && last.page.url ? last.page.url.slice(0, 120) : ''}` : ''}` : 'no malicious verdicts on urlscan.io',
+          link: `https://urlscan.io/search/#${encodeURIComponent(t === 'ip' ? 'page.ip:"' + v + '"' : 'page.domain:"' + v + '"')}` };
       } },
     { id: 'urlhaus', name: 'abuse.ch URLhaus', types: ['domain', 'ip'], ttl: 1 * D, daily: 3000, gap: 500, minPriority: 1, enabled: () => !!k.abusech,
       run: async v => {
@@ -315,8 +327,8 @@ class Intel {
       const o = rowOut(r);
       const src = o.sources;
       const what = o.type === 'domain'
-        ? (src.includes('dns') || src.includes('dns-heuristic') ? 'queried' : src.includes('manual') ? 'looked up' : 'seen')
-        : src.includes('connection') ? 'in active connections' : src.includes('ssh') ? 'tried SSH' : src.includes('screensharing') ? 'tried Screen Sharing'
+        ? (src.includes('download') ? 'downloaded from' : src.includes('dns') || src.includes('dns-heuristic') ? 'queried' : src.includes('manual') ? 'looked up' : 'seen')
+        : src.includes('download') ? 'downloaded from' : src.includes('connection') ? 'in active connections' : src.includes('ssh') ? 'tried SSH' : src.includes('screensharing') ? 'tried Screen Sharing'
           : src.includes('firewall') ? 'probed the firewall' : src.some(s => s.startsWith('syslog:')) ? `in syslog from ${src.find(s => s.startsWith('syslog:')).slice(7)}` : src.includes('resolved') ? 'resolved from a domain' : 'seen';
       return { sev: o.risk_score >= 75 ? 'high' : 'medium', area: 'Threat intel', source: 'feeds / CrowdSec / OSINT',
         title: `${o.risk === 'malicious' ? 'Malicious' : 'Suspicious'} ${o.type === 'ip' ? 'IP' : 'domain'} ${what}: ${o.value}`,
