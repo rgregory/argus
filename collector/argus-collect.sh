@@ -192,8 +192,41 @@ network_state() {
 # USB and Bluetooth devices (hourly; new ones are reported)
 devices() { system_profiler -json -detailLevel mini SPUSBHostDataType SPUSBDataType SPBluetoothDataType 2>/dev/null; }
 
+# Code signature of every running executable (hourly). Cached by path and
+# mtime, so codesign only runs for new or changed binaries.
+# Columns: path, mtime, class (apple|appstore|devid|adhoc|unsigned|other), team, identifier
+signatures() {
+  local C="$INBOX/.state/signatures.tsv" N="$INBOX/.state/signatures.new" p m line out cls team ident
+  touch "$C"
+  ps -axo comm= 2>/dev/null | grep '^/' | sort -u | while IFS= read -r p; do
+    [ -f "$p" ] || continue
+    m=$(stat -f %m "$p" 2>/dev/null) || continue
+    line=$(awk -F'\t' -v p="$p" -v m="$m" '$1 == p && $2 == m { print; exit }' "$C")
+    if [ -z "$line" ]; then
+      out=$(codesign -dvv "$p" 2>&1)
+      case "$out" in
+        *"not signed at all"*) cls=unsigned ;;
+        *"Signature=adhoc"*) cls=adhoc ;;
+        *"Authority=Software Signing"*) cls=apple ;;
+        *"Authority=Apple Mac OS Application Signing"*) cls=appstore ;;
+        *"Authority=Developer ID Application"*) cls=devid ;;
+        *) cls=other ;;
+      esac
+      team=$(printf '%s\n' "$out" | sed -n 's/^TeamIdentifier=//p' | head -n 1); [ "$team" = "not set" ] && team=
+      ident=$(printf '%s\n' "$out" | sed -n 's/^Identifier=//p' | head -n 1)
+      line=$(printf '%s\t%s\t%s\t%s\t%s' "$p" "$m" "$cls" "$team" "$ident")
+    fi
+    printf '%s\n' "$line"
+  done > "$N"
+  # keep entries for programs that are not running right now
+  awk -F'\t' 'NR == FNR { seen[$1] = 1; print; next } !seen[$1]' "$N" "$C" | head -n 5000 > "$C.tmp" && mv -f "$C.tmp" "$C"
+  rm -f "$N"
+  put "$INBOX/snapshots/signatures.tsv" < "$C"
+}
+
 snapshots() {
   local S="$INBOX/snapshots"
+  signatures
   devices | put "$S/devices.json"
   fim | put "$S/fim.txt"
   certs_system | put "$S/certs-system.txt"

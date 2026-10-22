@@ -93,6 +93,22 @@ class HostSec {
   }
   mtimeOf(rel) { try { return fs.statSync(path.join(cfg.inbox, rel)).mtimeMs; } catch (e) { return null; } }
 
+  // Code-signing class for an executable path. The collector's hourly codesign
+  // scan of running programs wins; Endpoint Security exec events fill the gaps.
+  // cls: apple | appstore | devid | adhoc | unsigned | other | '' (unknown)
+  signer(p) {
+    const tsv = this.read('snapshots/signatures.tsv', txt => {
+      const m = new Map();
+      for (const l of txt.split('\n')) { const [path, , cls, team, id] = l.split('\t'); if (path && cls) m.set(path, { cls, team: team || '', id: id || '' }); }
+      return m;
+    });
+    const s = tsv && tsv.get(p);
+    if (s) return s;
+    const e = this.store.get('SELECT team, platform, adhoc FROM es_exec WHERE path = ? LIMIT 1', p);
+    if (!e) return { cls: '', team: '', id: '' };
+    return { cls: e.platform ? 'apple' : e.adhoc ? 'adhoc' : e.team ? 'devid' : 'unsigned', team: e.team || '', id: '' };
+  }
+
   // ------------------------------------------------------------- ES ingest
   cycle() {
     if (!this.sigmaBusy && !this.sigma.disabled) {

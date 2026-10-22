@@ -127,6 +127,25 @@
   .btn-primary, .btn-check:checked + .btn { background: var(--tblr-primary) !important; border-color: var(--tblr-primary) !important; color: var(--tblr-primary-fg) !important; }
   .subheader { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; text-transform: none; letter-spacing: .06em; font-size: .9rem; color: var(--muted); }
   .navbar-brand .ti { color: var(--ink); }
+  .ed-ops { grid-template-columns: 1.7fr 1fr; }
+  @media (max-width: 900px) { .ed-ops { grid-template-columns: 1fr; } }
+  .ed-ops .ed-changes { grid-template-columns: 1fr; gap: .6rem; }
+  .ed-sevline { display: block; font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .04em; font-size: .9rem; color: var(--muted); margin-bottom: .15rem; }
+  .ed-more { color: var(--muted); white-space: nowrap; }
+  .ed-mast2 { display: grid; grid-template-columns: 280px 1fr; gap: 2.6rem; align-items: center; text-align: left; padding-top: 2rem; }
+  .ed-mast2 .ed-title { text-align: left; }
+  .ed-mast2 .ed-lede { margin: 0; max-width: 40rem; }
+  .ed-clock svg { width: 280px; height: 280px; display: block; overflow: visible; }
+  .ed-legend { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; margin-top: 1rem; font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .04em; font-size: .85rem; color: var(--muted); }
+  .ed-legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .35rem; transform: translateY(.05rem); }
+  @media (max-width: 760px) { .ed-mast2 { grid-template-columns: 1fr; justify-items: center; text-align: center; } .ed-mast2 .ed-title { text-align: center; } .ed-legend { justify-content: center; } }
+  .ed-stats { display: grid; grid-template-columns: repeat(6, 1fr); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); margin: 2rem 0 .5rem; }
+  .ed-stat { padding: .9rem .4rem .8rem; text-align: center; border-left: 1px solid var(--rule); }
+  .ed-stat:first-of-type { border-left: 0; }
+  .ed-stat-v { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(1.8rem, 3.6vw, 2.8rem); line-height: 1; font-variant-numeric: lining-nums; font-variation-settings: "opsz" 144; }
+  .ed-stat-l { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .07em; color: var(--muted); font-size: .88rem; margin-top: .35rem; }
+  .ed-stat-u { opacity: .75; }
+  @media (max-width: 760px) { .ed-stats { grid-template-columns: repeat(3, 1fr); } .ed-stat:nth-of-type(4) { border-left: 0; } }
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
@@ -179,12 +198,23 @@
         <!-- ============================================================ OVERVIEW -->
         <div x-show="tab === 'overview'" class="ed">
           <!-- masthead -->
-          <header class="ed-mast">
-            <div class="ed-kicker" x-text="'The Argus brief · ' + new Date(r.generated).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })"></div>
-            <h1 class="ed-title">What has <span x-text="r.host.name || 'this Mac'"></span> been up&nbsp;to?</h1>
-            <p class="ed-lede" x-html="lede()"></p>
-            <div class="ed-ornament"><span></span><i class="ti ti-eye"></i><span></span></div>
+          <header class="ed-mast ed-mast2">
+            <div class="ed-clock" x-html="clockSvg()" x-show="r.timeline.length"></div>
+            <div class="ed-masttext">
+              <div class="ed-kicker" x-text="'The Argus brief · ' + new Date(r.generated).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })"></div>
+              <h1 class="ed-title">What has <span x-text="r.host.name || 'this Mac'"></span> been up&nbsp;to?</h1>
+              <p class="ed-lede" x-html="lede()"></p>
+              <div class="ed-legend"><template x-for="c in tlCats()" :key="c[0]"><span><i :style="'background:' + areaColor(c[2])"></i><span x-text="c[1]"></span></span></template></div>
+            </div>
           </header>
+          <div class="ed-stats">
+            <template x-for="s in mastStats()" :key="s.label">
+              <div class="ed-stat">
+                <div class="ed-stat-v" :style="s.color ? 'color:' + s.color : ''" x-text="s.value"></div>
+                <div class="ed-stat-l"><span x-text="s.label"></span> <span class="ed-stat-u" x-text="s.unit || ''"></span></div>
+              </div>
+            </template>
+          </div>
 
           <!-- portraits -->
           <section class="ed-sec">
@@ -211,17 +241,31 @@
           </section>
 
           <!-- changes + attention list -->
-          <section class="ed-sec ed-two">
+          <section class="ed-sec ed-two ed-ops">
+            <div>
+              <h2 class="ed-h">What should you look at first?</h2>
+              <p class="ed-sub">Open high and medium findings, by severity. Acknowledged findings drop off.</p>
+              <ol class="ed-list">
+                <template x-for="(f, i) in r.findings.filter(x => !x.acked && (x.sev === 'high' || x.sev === 'medium')).slice(0, 10)" :key="f.id">
+                  <li @click="fArea = f.area; fSev = ['high','medium','low','info']; setTab('findings'); openFinding = f.id">
+                    <span class="ed-num" :style="'color:' + sevColor(f.sev)" x-text="String(i + 1).padStart(2, '0')"></span>
+                    <span class="ed-area" :style="'color:' + areaColor(f.area)" x-text="f.area"></span>
+                    <span class="ed-ftitle" x-text="plainTitle(f)"></span>
+                  </li>
+                </template>
+              </ol>
+              <div class="ed-none" x-show="!r.findings.some(x => !x.acked && (x.sev === 'high' || x.sev === 'medium'))">No open high or medium findings.</div>
+            </div>
             <div>
               <h2 class="ed-h">What changed since yesterday?</h2>
               <p class="ed-sub" x-html="changesSub()"></p>
-              <div class="ed-changes">
+              <div class="ed-changes" x-show="changesReady() && changesTotal()">
                 <template x-for="col in [['new', 'New'], ['changed', 'Changed'], ['resolved', 'Resolved']]" :key="col[0]">
-                  <div>
+                  <div x-show="((r.changes && r.changes[col[0]]) || []).length">
                     <div class="ed-colhead"><span x-text="col[1]"></span> <b x-text="((r.changes && r.changes[col[0]]) || []).length"></b></div>
                     <template x-for="(c, i) in ((r.changes && r.changes[col[0]]) || []).slice(0, 8)" :key="i">
                       <a href="#" class="ed-change" :class="col[0] === 'resolved' && 'is-resolved'" @click.prevent="col[0] !== 'resolved' && (fQ = '', fArea = c.area, fSev = ['high','medium','low','info'], setTab('findings'), openFinding = c.id)">
-                        <i class="ed-dot" :style="'background:' + sevColor(c.sev)"></i><span x-text="c.title"></span>
+                        <i class="ed-dot" :style="'background:' + sevColor(c.sev)"></i><span x-text="plainTitle(c)"></span>
                       </a>
                     </template>
                     <div class="ed-none" x-show="!((r.changes && r.changes[col[0]]) || []).length">None.</div>
@@ -229,20 +273,6 @@
                 </template>
               </div>
               <a class="ed-link" href="/api/digest" target="_blank" rel="noopener">Read today's digest →</a>
-            </div>
-            <div>
-              <h2 class="ed-h">What should you look at first?</h2>
-              <p class="ed-sub">The open high and medium findings, most severe first. Acknowledge the ones you expect and they leave this list.</p>
-              <ol class="ed-list">
-                <template x-for="(f, i) in r.findings.filter(x => !x.acked && (x.sev === 'high' || x.sev === 'medium')).slice(0, 10)" :key="f.id">
-                  <li @click="fArea = f.area; fSev = ['high','medium','low','info']; setTab('findings'); openFinding = f.id">
-                    <span class="ed-num" :style="'color:' + sevColor(f.sev)" x-text="String(i + 1).padStart(2, '0')"></span>
-                    <span class="ed-area" :style="'color:' + areaColor(f.area)" x-text="f.area"></span>
-                    <span class="ed-ftitle" x-text="f.title"></span>
-                  </li>
-                </template>
-              </ol>
-              <div class="ed-none" x-show="!r.findings.some(x => !x.acked && (x.sev === 'high' || x.sev === 'medium'))">No open high or medium findings.</div>
             </div>
           </section>
 
@@ -1080,6 +1110,51 @@ function argus() {
     },
     sevColor(s) { return `var(--sev-${s || 'info'})`; },
     esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); },
+    word(n) { return ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] || this.num(n); },
+    Word(n) { const w = this.word(n); return w.charAt(0).toUpperCase() + w.slice(1); },
+    // Operator-style finding titles for the overview. The Findings tab keeps the exact engine titles.
+    plainTitle(f) {
+      const t = String(f.title || '');
+      const s = (n, a, b) => +n === 1 ? a : b;
+      const rules = [
+        [/^(\d+) apps? not updated since known-exploited/, n => `${n} ${s(n, 'app', 'apps')} unpatched against actively exploited CVEs`],
+        [/^(\d+) installed apps? with known-exploited/, n => `${n} ${s(n, 'app', 'apps')} had exploited CVEs in the past year (since patched)`],
+        [/^macOS (\S+) is missing fixes for (\d+)/, (v, n) => `macOS ${v} missing ${n} actively exploited ${s(n, 'fix', 'fixes')}`],
+        [/^(\d+) enabled background items? without a Developer Team ID/, n => `${n} enabled login ${s(n, 'item', 'items')} with no Developer Team ID`],
+        [/^Background items running from unusual locations/, () => `Login items running from non-standard paths`],
+        [/^(\d+) new background items? registered/, n => `${n} new login ${s(n, 'item', 'items')} registered`],
+        [/^(\d+) background items? added or enabled/, n => `${n} login ${s(n, 'item', 'items')} added or enabled`],
+        [/^(\d+) background items? removed or disabled/, n => `${n} login ${s(n, 'item', 'items')} removed or disabled`],
+        [/^(\d+) background-item registration/, n => `${n} login-item registration ${s(n, 'event', 'events')}`],
+        [/^(\d+) third-party permissions? with high-impact access in use/, n => `${n} third-party ${s(n, 'app', 'apps')} holding sensitive privacy access`],
+        [/^(\d+) high-impact permissions? granted \(live\)/, n => `${n} sensitive privacy ${s(n, 'grant', 'grants')}, last 24 h`],
+        [/^(\d+) new high-impact grants? in TCC/, n => `${n} new sensitive privacy ${s(n, 'grant', 'grants')}, last 7 d`],
+        [/^(\d+) third-party high-impact grants? on record/, n => `${n} third-party sensitive privacy ${s(n, 'grant', 'grants')} on record`],
+        [/^High-impact permission held by a program in an unusual location/, () => `Sensitive privacy access held by a binary in a non-standard path`],
+        [/^(\d+) services? listening beyond localhost/, n => `${n} ${s(n, 'service', 'services')} exposed beyond localhost`],
+        [/^(\d+) unsigned or oddly located programs? with internet/, n => `${n} unsigned or misplaced ${s(n, 'binary', 'binaries')} with internet traffic`],
+        [/^(\d+) newly seen programs? talking to the internet/, n => `${n} first-seen ${s(n, 'program', 'programs')} with internet traffic`],
+        [/^(\d+) certificate changes? in the System keychain/, n => `${n} system certificate trust ${s(n, 'change', 'changes')}, last 7 d`],
+        [/^(\d+) certificates? newly trusted as a root/, n => `${n} new trusted root ${s(n, 'certificate', 'certificates')}`],
+        [/^Crashes from programs in unusual locations/, () => `Crashes from binaries in non-standard paths`],
+        [/^(\d+) rejected sudo\/su attempts?/, n => `${n} failed sudo/su ${s(n, 'elevation', 'elevations')}`],
+        [/^(\d+) failed (SSH )?authentications?(.*)/, (n, ssh, rest) => `${n} failed ${ssh ? 'SSH ' : ''}${s(n, 'login', 'logins')}${rest || ''}`],
+        [/^(\d+) remote session sources?/, n => `Remote sessions from ${n} ${s(n, 'source', 'sources')}`],
+        [/^(\d+) suspicious command lines? executed/, n => `${n} suspicious command ${s(n, 'line', 'lines')} executed`],
+        [/^(\d+) programs? launched from unusual locations/, n => `${n} ${s(n, 'binary', 'binaries')} launched from non-standard paths`],
+        [/^(\d+) Sigma rules? matched/, n => `${n} Sigma ${s(n, 'rule', 'rules')} matched`],
+        [/^XProtect acted on malware \((\d+)/, n => `XProtect remediated malware (${n} ${s(n, 'event', 'events')})`],
+        [/^(\d+) container images? with critical or exploited/, n => `${n} container ${s(n, 'image', 'images')} with critical or exploited CVEs`],
+        [/^(\d+) Homebrew packages? with high\/critical/, n => `${n} Homebrew ${s(n, 'package', 'packages')} with high, critical or exploited CVEs`],
+        [/^(\d+) sideloaded or unsigned browser extensions?/, n => `${n} sideloaded or unsigned browser ${s(n, 'extension', 'extensions')}`],
+        [/^(\d+) new USB devices?/, n => `${n} new USB ${s(n, 'device', 'devices')}, last 7 d`],
+        [/^(\d+) new Bluetooth devices?/, n => `${n} new Bluetooth ${s(n, 'device', 'devices')}, last 7 d`],
+        [/^(\d+) new Wi-Fi networks?/, n => `${n} new Wi-Fi ${s(n, 'network', 'networks')}, last 7 d`],
+      ];
+      for (const [re, fn] of rules) { const m = t.match(re); if (m) return fn(...m.slice(1)); }
+      return t.replace(/\s*\(live\)/, ', last 24 h').replace(/\s*\(last 7 days\)/, ', last 7 d').replace(/\s*\(24 h\)/, ', last 24 h')
+        .replace(/\bhigh-impact\b/g, 'sensitive').replace(/\bunusual locations?\b/g, 'non-standard paths');
+    },
     open() { return this.r ? this.r.findings.filter(f => !f.acked) : []; },
     areaStats() {
       const m = new Map(), w = { high: 9, medium: 3, low: 1, info: 0 };
@@ -1093,29 +1168,69 @@ function argus() {
     },
     lede() {
       if (!this.r) return '';
-      const c = this.r.counts, e = this.esc, n = v => `<b>${this.num(v)}</b>`, col = (s, v) => `<b style="color:${this.sevColor(s)}">${this.num(v)}</b>`;
-      const ev = this.tpTotal('events'), flagged = (this.r.intel.malicious || 0) + (this.r.intel.suspicious || 0);
-      const os = this.r.vulns && this.r.vulns.macos;
-      const parts = [`In the last 24 hours Argus read ${n(ev)} events (${e(this.bytes(this.tpTotal('bytes')))}) from <b>${e(this.r.host.name || 'this Mac')}</b> and your network.`];
-      if (c.high || c.medium) parts.push(`${c.high ? col('high', c.high) + ` finding${c.high === 1 ? ' needs' : 's need'} action` : 'Nothing needs urgent action'}${c.medium ? `, and ${col('medium', c.medium)} deserve${c.medium === 1 ? 's' : ''} a look` : ''}.`);
-      else parts.push('Nothing high or medium is open.');
-      parts.push(`Of ${n(this.r.intel.total || 0)} addresses and domains checked against threat intelligence, ${flagged ? col('high', flagged) + ' were flagged' : '<b>none</b> were flagged'}.`);
-      if (os && os.installed) parts.push(os.behind && os.behind.length ? `macOS ${e(os.installed)} is ${col('high', os.behind.length)} security release${os.behind.length === 1 ? '' : 's'} behind.` : `macOS ${e(os.installed)} is current.`);
-      if (this.r.findingState && this.r.findingState.acked) parts.push(`${n(this.r.findingState.acked)} acknowledged finding${this.r.findingState.acked === 1 ? ' is' : 's are'} set aside.`);
+      const e = this.esc, a = this.areaStats()[0], os = this.r.vulns && this.r.vulns.macos, ack = this.r.findingState && this.r.findingState.acked;
+      const parts = [];
+      if (a) parts.push(`Highest exposure: <b style="color:${this.areaColor(a.area)}">${e(a.area)}</b> (${['high', 'medium', 'low'].filter(s => a[s]).map(s => `<b style="color:${this.sevColor(s)}">${a[s]}</b> ${s}`).join(', ')}).`);
+      else parts.push('No open high, medium or low findings.');
+      if (os && os.installed) parts.push(os.behind && os.behind.length ? `macOS ${e(os.installed)} is <b style="color:${this.sevColor('high')}">${os.behind.length}</b> security ${os.behind.length === 1 ? 'release' : 'releases'} behind.` : `macOS ${e(os.installed)} is current.`);
+      if (ack) parts.push(`<b>${ack}</b> acknowledged ${ack === 1 ? 'finding' : 'findings'} hidden.`);
       return parts.join(' ');
+    },
+    mastStats() {
+      if (!this.r) return [];
+      const c = this.r.counts, flagged = (this.r.intel.malicious || 0) + (this.r.intel.suspicious || 0);
+      const big = v => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : this.num(v);
+      const b = this.bytes(this.tpTotal('bytes')).split(' ');
+      return [
+        { label: 'Events', value: big(this.tpTotal('events')), unit: '24 h' },
+        { label: 'Read', value: b[0], unit: b[1] || '' },
+        { label: 'High', value: c.high || 0, color: c.high ? this.sevColor('high') : '' },
+        { label: 'Medium', value: c.medium || 0, color: c.medium ? this.sevColor('medium') : '' },
+        { label: 'Indicators', value: big(this.r.intel.total || 0), unit: 'checked' },
+        { label: 'Flagged', value: flagged, color: flagged ? this.sevColor('high') : '' },
+      ];
+    },
+    // 24-hour radial clock: midnight at the top, one wedge per hour, categories stacked outward.
+    clockSvg() {
+      const tl = ((this.r && this.r.timeline) || []).slice(-24), cats = this.tlCats();
+      const S = 280, c = S / 2, r0 = 58, r1 = 128, tot = x => cats.reduce((a, [k]) => a + (x[k] || 0), 0);
+      const max = Math.max(1, ...tl.map(tot));
+      const rad = v => r0 + (r1 - r0) * Math.sqrt(v / max);
+      const pt = (r, a) => [c + r * Math.sin(a), c - r * Math.cos(a)];
+      const arc = (ra, rb, a0, a1) => { const [x0, y0] = pt(ra, a0), [x1, y1] = pt(rb, a0), [x2, y2] = pt(rb, a1), [x3, y3] = pt(ra, a1);
+        return `M${x0.toFixed(1)} ${y0.toFixed(1)}L${x1.toFixed(1)} ${y1.toFixed(1)}A${rb} ${rb} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}L${x3.toFixed(1)} ${y3.toFixed(1)}A${ra} ${ra} 0 0 0 ${x0.toFixed(1)} ${y0.toFixed(1)}Z`; };
+      const out = [`<svg viewBox="0 0 ${S} ${S}" role="img" aria-label="Security events by hour of day">`];
+      for (const g of [.25, .5, 1]) out.push(`<circle cx="${c}" cy="${c}" r="${(r0 + (r1 - r0) * Math.sqrt(g)).toFixed(1)}" fill="none" stroke="var(--rule)" stroke-dasharray="1 4"/>`);
+      for (let h = 0; h < 24; h++) { const [x0, y0] = pt(r0 - 4, h * Math.PI / 12), [x1, y1] = pt(h % 6 ? r0 - 8 : r0 - 12, h * Math.PI / 12); out.push(`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--muted)" stroke-width="${h % 6 ? .6 : 1.2}"/>`); }
+      [[0, '0'], [6, '6'], [12, '12'], [18, '18']].forEach(([h, l]) => { const [x, y] = pt(r1 + 10, h * Math.PI / 12); out.push(`<text x="${x}" y="${y + 4}" text-anchor="middle" style="font:11px 'Source Serif 4',Georgia,serif;fill:var(--muted)">${l}</text>`); });
+      const now = new Date().getHours();
+      for (const x of tl) {
+        const h = new Date(x.t).getHours(), a0 = (h + .08) * Math.PI / 12, a1 = (h + .92) * Math.PI / 12;
+        let acc = 0, inner = r0;
+        for (const [k, l, area] of cats) {
+          if (!x[k]) continue;
+          acc += x[k]; const outer = rad(acc);
+          out.push(`<path d="${arc(inner, outer, a0, a1)}" fill="${this.areaColor(area)}" opacity="${h === now ? 1 : .82}"><title>${h}:00 · ${x[k]} ${this.esc(l)}</title></path>`);
+          inner = outer;
+        }
+      }
+      const [nx, ny] = pt(r1 + 2, (now + .5) * Math.PI / 12), [mx, my] = pt(r0 - 2, (now + .5) * Math.PI / 12);
+      out.push(`<line x1="${mx}" y1="${my}" x2="${nx}" y2="${ny}" stroke="var(--ink)" stroke-width="1" opacity=".55"/><circle cx="${nx}" cy="${ny}" r="2.6" fill="var(--ink)"/>`);
+      const name = this.esc((this.r && this.r.host.name) || 'Mac'), sum = tl.reduce((a, x) => a + tot(x), 0);
+      out.push(`<text x="${c}" y="${c - 4}" text-anchor="middle" style="font:600 22px Fraunces,Georgia,serif;fill:var(--ink)">${this.num(sum)}</text>`);
+      out.push(`<text x="${c}" y="${c + 14}" text-anchor="middle" style="font:600 11px Fraunces,Georgia,serif;font-variant:small-caps;letter-spacing:.08em;fill:var(--muted)">${name} · 24 h</text>`);
+      out.push('</svg>');
+      return out.join('');
     },
     portraitSub() {
       const a = this.areaStats();
-      if (!a.length) return 'Nothing open needs attention.';
-      const share = Math.round(100 * a[0].n / Math.max(1, this.open().filter(f => f.sev !== 'info').length));
-      return `<b style="color:${this.areaColor(a[0].area)}">${this.esc(a[0].area)}</b> carries the most weight right now. Each ring is that area's share of the open findings, coloured by how severe they are.`;
+      if (!a.length) return 'No open findings.';
+      const k = (s, l) => `<b style="color:${this.sevColor(s)}">${l}</b>`;
+      return `Open findings by area, weighted by severity. Highest: <b style="color:${this.areaColor(a[0].area)}">${this.esc(a[0].area)}</b>. Arc length is the area's share of all open findings; ${k('high', 'high')}, ${k('medium', 'medium')}, ${k('low', 'low')}.`;
     },
     portraitText(a) {
-      const bits = [];
-      if (a.high) bits.push(`<b style="color:${this.sevColor('high')}">${a.high}</b> high`);
-      if (a.medium) bits.push(`<b style="color:${this.sevColor('medium')}">${a.medium}</b> medium`);
-      if (a.low) bits.push(`<b>${a.low}</b> low`);
-      return `${bits.join(', ')}. ${this.esc(a.top.title)}.`;
+      const sv = ['high', 'medium', 'low'].filter(s => a[s]).map(s => `<b style="color:${this.sevColor(s)}">${a[s]}</b> ${s}`).join(' · ');
+      return `<span class="ed-sevline">${sv}</span>${this.esc(this.plainTitle(a.top))}${a.n > 1 ? ` <span class="ed-more">+${a.n - 1} more</span>` : ''}`;
     },
     ringSvg(a) {
       const total = Math.max(1, this.open().length), r = 52, C = 2 * Math.PI * r, col = this.areaColor(a.area);
@@ -1138,12 +1253,12 @@ function argus() {
     },
     timelineSub() {
       const tl = (this.r && this.r.timeline) || [];
-      if (!tl.length) return 'Security-relevant events from the unified log, hour by hour.';
+      if (!tl.length) return 'Unified-log security events per hour.';
       const cats = this.tlCats(), tot = x => cats.reduce((a, [k]) => a + (x[k] || 0), 0);
       const peak = tl.reduce((a, x) => tot(x) > tot(a) ? x : a, tl[0]);
       const dom = cats.map(([k, l, a]) => [l, a, peak[k] || 0]).sort((x, y) => y[2] - x[2])[0];
-      const legend = cats.map(([, l, a]) => `<b style="color:${this.areaColor(a)}">${l}</b>`).join(', ');
-      return `Security events from the unified log, hour by hour: ${legend}. The busiest hour was <b>${new Date(peak.t).toLocaleString([], { weekday: 'short', hour: 'numeric' })}</b> with <b>${tot(peak)}</b> events, mostly <b style="color:${this.areaColor(dom[1])}">${dom[0]}</b>.`;
+      const legend = cats.map(([, l, a]) => `<b style="color:${this.areaColor(a)}">${l}</b>`).join(' · ');
+      return `Unified-log security events per hour: ${legend}. Peak <b>${this.esc(new Date(peak.t).toLocaleString([], { weekday: 'short', hour: 'numeric' }))}</b>, <b>${tot(peak)}</b> events, mainly <b style="color:${this.areaColor(dom[1])}">${dom[0]}</b>.`;
     },
     timelineSvg() {
       const tl = (this.r && this.r.timeline) || [];
@@ -1169,34 +1284,43 @@ function argus() {
       out.push('</svg>');
       return out.join('');
     },
+    // Change tracking only means something against a baseline roughly a day old.
+    changesReady() { const ch = this.r && this.r.changes; return !!(ch && ch.since && Date.now() - ch.since > 20 * 3600e3); },
+    changesTotal() { const ch = (this.r && this.r.changes) || {}; return (ch.new || []).length + (ch.changed || []).length + (ch.resolved || []).length; },
     changesSub() {
       const ch = this.r && this.r.changes;
-      if (!ch || !ch.since) return 'Comparisons start once Argus has a day of hourly snapshots.';
-      return `Compared with <b>${this.esc(new Date(ch.since).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</b>: <b>${ch.new.length}</b> new, <b>${ch.changed.length}</b> changed, <b>${ch.resolved.length}</b> resolved.`;
+      if (!this.changesReady()) {
+        const first = this.r && this.r.findingState && this.r.findingState.firstSnap || (ch && ch.since);
+        return `Baseline building. First 24 h comparison ${first ? '<b>' + this.esc(new Date(first + 24 * 3600e3).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })) + '</b>' : 'after a day of hourly snapshots'}.`;
+      }
+      const when = this.esc(new Date(ch.since).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }));
+      if (!this.changesTotal()) return `No change since <b>${when}</b>.`;
+      return `Since <b>${when}</b>: <b>${ch.new.length}</b> new, <b>${ch.changed.length}</b> changed, <b>${ch.resolved.length}</b> resolved.`;
     },
     talkers() {
       const h = this.r && this.r.hostsec;
       if (!h) return [];
       const sig = new Map(((h.net && h.net.programs) || []).map(p => [p.path, p]));
       const ls = (h.littlesnitch && h.littlesnitch.available && h.littlesnitch.programs) || [];
-      const src = ls.length ? ls.map(p => ({ path: p.path, bytes: (p.bytes_in || 0) + (p.bytes_out || 0), conns: p.connects || 0, remotes: p.remotes, hosts: p.hosts || [] }))
+      const src = ls.length ? ls.map(p => ({ signer: p.signer, path: p.path, bytes: (p.bytes_in || 0) + (p.bytes_out || 0), conns: p.connects || 0, remotes: p.remotes, hosts: p.hosts || [] }))
         : ((h.net && h.net.programs) || []).map(p => ({ path: p.path, bytes: 0, conns: p.remotes, remotes: p.remotes, hosts: p.sample || [] }));
       const flagged = new Set(((h.dnsAttribution && h.dnsAttribution.rows) || []).flatMap(r => r.programs.map(p => p.path)));
       return src.map(p => {
         const s = sig.get(p.path) || {};
-        const cls = s.platform || /^\/(System|usr\/(s?bin|libexec))\//.test(p.path) ? 'Apple' : s.team ? 'Developer ID' : s.known ? 'Unsigned / ad-hoc' : 'Signer unknown';
+        const sg = p.signer || s.signer || '';
+        const CLS = { apple: 'Apple', appstore: 'App Store', devid: 'Developer ID', adhoc: 'Unsigned / ad-hoc', unsigned: 'Unsigned / ad-hoc', other: 'Other signature' };
+        const cls = CLS[sg] || (s.platform || /^\/(System|usr\/(s?bin|libexec))\//.test(p.path) ? 'Apple' : s.team ? 'Developer ID' : s.known ? 'Unsigned / ad-hoc' : 'Signer unknown');
         return { ...p, name: (p.path.match(/([^/]+)\.app\//) || [])[1] || p.path.split('/').pop(), cls, flagged: flagged.has(p.path) || (s.flagged > 0) };
       });
     },
     talkersSub() {
-      const t = this.talkers(), by = c => t.filter(x => x.cls === c).length;
-      const odd = by('Unsigned / ad-hoc'), fl = t.filter(x => x.flagged).length;
-      return `<b>${t.length}</b> programs reached the network in the last day, grouped by who signed them. Higher means more data${t.some(x => x.bytes) ? '' : ' (connections, until Little Snitch data arrives)'}. ${odd ? `<b style="color:${this.sevColor('medium')}">${odd}</b> ${odd === 1 ? 'is' : 'are'} unsigned or ad-hoc signed.` : 'None are unsigned.'} ${fl ? `<b style="color:${this.sevColor('high')}">${fl}</b> touched a flagged destination (ringed).` : ''}`;
+      const t = this.talkers(), odd = t.filter(x => x.cls === 'Unsigned / ad-hoc').length, fl = t.filter(x => x.flagged).length;
+      return `<b>${t.length}</b> programs with network traffic, last 24 h, grouped by signer. Y axis: ${t.some(x => x.bytes) ? 'bytes transferred (log)' : 'connections (log; bytes once Little Snitch data arrives)'}. Unsigned or ad-hoc: <b style="color:${odd ? this.sevColor('medium') : 'inherit'}">${odd}</b>.${fl ? ` Contacted flagged destinations: <b style="color:${this.sevColor('high')}">${fl}</b> (ringed).` : ''}`;
     },
     talkersSvg() {
       const t = this.talkers(); if (!t.length) return '';
-      const cols = ['Apple', 'Developer ID', 'Unsigned / ad-hoc', 'Signer unknown'].filter(c => t.some(x => x.cls === c));
-      const colColor = { 'Apple': 'var(--muted)', 'Developer ID': this.areaColor('Permissions'), 'Unsigned / ad-hoc': this.areaColor('Network'), 'Signer unknown': this.areaColor('Posture') };
+      const cols = ['Apple', 'App Store', 'Developer ID', 'Other signature', 'Unsigned / ad-hoc', 'Signer unknown'].filter(c => t.some(x => x.cls === c));
+      const colColor = { 'Apple': 'var(--muted)', 'App Store': this.areaColor('Certificates'), 'Other signature': this.areaColor('Devices'), 'Developer ID': this.areaColor('Permissions'), 'Unsigned / ad-hoc': this.areaColor('Network'), 'Signer unknown': this.areaColor('Posture') };
       const W = 1100, H = 420, top = 34, bot = 380, left = 46, cw = (W - left) / cols.length;
       const val = x => Math.log10(1 + (x.bytes || x.conns || 0));
       const max = Math.max(1, ...t.map(val));
@@ -1237,10 +1361,12 @@ function argus() {
     },
     postureSub() {
       const p = (this.r && this.r.posture) || [];
-      const f = p.filter(x => x.status === 'fail').length, w = p.filter(x => x.status === 'warn').length, ok = p.filter(x => x.status === 'pass').length;
-      if (!p.length) return 'Security settings, checked every hour.';
-      return `<b>${ok}</b> of ${p.length} checks pass. ${f ? `<b style="color:${this.sevColor('high')}">${f}</b> fail` : 'None fail'}${w ? ` and <b style="color:${this.sevColor('medium')}">${w}</b> need${w === 1 ? 's' : ''} attention` : ''}; the rest are for information.`;
+      const f = p.filter(x => x.status === 'fail').length, wn = p.filter(x => x.status === 'warn').length, ok = p.filter(x => x.status === 'pass').length;
+      if (!p.length) return 'Security configuration, checked hourly.';
+      return `${p.length} checks: <b style="color:${this.sevColor('high')}">${f}</b> fail, <b style="color:${this.sevColor('medium')}">${wn}</b> warn, <b>${ok}</b> pass (hidden).`;
     },
+
+
     async ackFinding(f, undo) {
       this.ackBusy = true;
       try {

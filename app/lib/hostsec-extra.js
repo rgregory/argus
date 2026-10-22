@@ -115,7 +115,7 @@ function analyzeLs(hs, add) {
   const totals = hs.store.get("SELECT SUM(connects) AS c, SUM(denies) AS d, SUM(bytes_in) AS bi, SUM(bytes_out) AS bo, COUNT(DISTINCT path) AS progs FROM ls_flows WHERE last_seen > ?", since);
   const top = hs.store.all(`SELECT path, MAX(parent) AS parent, COUNT(DISTINCT ip) AS remotes, SUM(connects) AS connects, SUM(denies) AS denies, SUM(bytes_in) AS bytes_in, SUM(bytes_out) AS bytes_out, MAX(last_seen) AS last,
     GROUP_CONCAT(DISTINCT NULLIF(host, '')) AS hosts FROM ls_flows WHERE last_seen > ? GROUP BY path ORDER BY bytes_out + bytes_in DESC LIMIT 300`, since)
-    .map(r => ({ ...r, hosts: String(r.hosts || '').split(',').filter(Boolean).slice(0, 6) }));
+    .map(r => ({ ...r, hosts: String(r.hosts || '').split(',').filter(Boolean).slice(0, 6), signer: hs.signer(r.path).cls, team: hs.signer(r.path).team }));
   return { available: true, lastAt: hs.lsLast || n.last, totals, programs: top, denied: denied.slice(0, 200), inbound: inbound.slice(0, 200) };
 }
 
@@ -167,12 +167,17 @@ function analyzeNet(hs, add) {
   const since = now - 24 * 3600e3;
   const rows = hs.store.all('SELECT path, remote, port, first_seen, last_seen, seen FROM net_seen WHERE last_seen > ?', since);
   const esSince = hs.store.kvGet('es.since', null);
-  const sig = path => hs.store.get('SELECT team, platform, adhoc, MIN(first_seen) AS first_seen FROM es_exec WHERE path = ?', path) || {};
+  const sig = path => {
+    const e = hs.store.get('SELECT team, platform, adhoc, MIN(first_seen) AS first_seen FROM es_exec WHERE path = ?', path) || {};
+    const s = hs.signer(path);
+    if (!s.cls) return e;
+    return { team: s.team || e.team || '', platform: s.cls === 'apple' ? 1 : 0, adhoc: s.cls === 'adhoc' ? 1 : 0, first_seen: e.first_seen ?? 0, cls: s.cls };
+  };
   const flagged = ip => hs.store.get('SELECT risk, risk_score, reasons FROM observables WHERE value = ? AND type = \'ip\' AND risk_score >= 40', ip);
   const byProg = new Map();
   for (const r of rows) {
     let p = byProg.get(r.path);
-    if (!p) { const s = sig(r.path); p = { path: r.path, remotes: new Set(), ports: new Set(), last: 0, first: r.first_seen, team: s.team || '', platform: !!s.platform, adhoc: !!s.adhoc, known: s.first_seen !== null && s.first_seen !== undefined, binFirst: s.first_seen || null, flagged: [] }; byProg.set(r.path, p); }
+    if (!p) { const s = sig(r.path); p = { path: r.path, remotes: new Set(), ports: new Set(), last: 0, first: r.first_seen, signer: s.cls || '', team: s.team || '', platform: !!s.platform, adhoc: !!s.adhoc, known: s.first_seen !== null && s.first_seen !== undefined, binFirst: s.first_seen || null, flagged: [] }; byProg.set(r.path, p); }
     p.remotes.add(r.remote); p.ports.add(r.port); p.last = Math.max(p.last, r.last_seen); p.first = Math.min(p.first, r.first_seen);
     const f = flagged(r.remote);
     if (f && !p.flagged.some(x => x.ip === r.remote)) p.flagged.push({ ip: r.remote, port: r.port, risk: f.risk, why: (JSON.parse(f.reasons || '[]')[0] || '') });
@@ -194,7 +199,7 @@ function analyzeNet(hs, add) {
   if (fresh.length) add({ sev: 'low', area: 'Network', title: `${plural(fresh.length, 'newly seen program')} talking to the internet`, source: 'lsof + Endpoint Security',
     detail: 'Third-party programs first seen in the last 7 days that opened outbound connections.', evidence: fresh.map(p => `${fmt(p.binFirst)} first run · ${line(p)}`) });
   return { available: true, programs: progs.sort((a, b) => b.remotes.size - a.remotes.size).slice(0, 300)
-    .map(p => ({ path: p.path, remotes: p.remotes.size, sample: [...p.remotes].slice(0, 5), ports: [...p.ports].slice(0, 10), last: p.last, team: p.team, platform: p.platform, adhoc: p.adhoc, known: p.known, flagged: p.flagged.length })) };
+    .map(p => ({ path: p.path, remotes: p.remotes.size, sample: [...p.remotes].slice(0, 5), ports: [...p.ports].slice(0, 10), last: p.last, signer: p.signer, team: p.team, platform: p.platform, adhoc: p.adhoc, known: p.known, flagged: p.flagged.length })) };
 }
 
 // ------------------------------------------------------------ file integrity
