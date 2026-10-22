@@ -47,7 +47,7 @@ class Alerts {
     const items = [];
     for (const f of report.findings || []) {
       if (f.acked || (RANK[f.sev] ?? 9) > this.minSev) continue;
-      items.push({ key: 'f:' + f.id, fp: f.fp || f.title, kind: 'finding', sev: f.sev, title: f.title, area: f.area, line: (f.evidence || [])[0] || '' });
+      items.push({ key: 'f:' + f.id, fp: f.fp || f.title, fpV1: f.fpV1, kind: 'finding', sev: f.sev, title: f.title, area: f.area, line: (f.evidence || [])[0] || '' });
     }
     const hc = (report.health && report.health.checks) || [];
     if (this.health !== 'off' && !(report.health && report.health.grace)) {
@@ -63,7 +63,7 @@ class Alerts {
       log.info(`alerts armed; ${items.length} open item(s) recorded without notifying`);
       return;
     }
-    const fresh = items.filter(it => sent.get(it.key) !== it.fp);
+    const fresh = items.filter(it => sent.get(it.key) !== it.fp && !(it.fpV1 && sent.get(it.key) === it.fpV1));
     // health checks that were alerted and have recovered
     const live = new Set(items.map(i => i.key));
     const recovered = report.health && report.health.grace ? [] : [...sent.keys()].filter(k => k.startsWith('h:') && !live.has(k) && hc.some(c => 'h:' + c.id === k && c.status === 'ok'));

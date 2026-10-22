@@ -18,47 +18,77 @@ CREATE INDEX IF NOT EXISTS finding_snap_ts ON finding_snap(ts);
 `;
 
 const TS = /^\s*\d{4}-\d\d-\d\d[ T]\d\d:\d\d(:\d\d)?(\.\d+)?Z?\s*/;
-function normLine(l) {
+// Version 1 normalisation, kept so acknowledgements made before 1.4.0 still match.
+function normLineV1(l) {
   return String(l).replace(TS, '').replace(/\s*\(×\d+\)|\s*\(\d+×\)|\b\d+×/g, '')
     .replace(/\b(last|first seen|updated|modified)\s+\d{4}-\d\d-\d\d[ T][\d:]+/gi, '$1')
-    // indicator lines: "first seen 10/19/2026, 2:58:47 AM, last 10/22/2026, 5:56:45 PM, 44 hits"
     .replace(/^first seen .*, last .*, \d+ hits$/i, 'first seen')
-    // reputation counters that drift with every refresh: "confidence 95%, 174 reports", "50 OTX pulses"
     .replace(/\bconfidence \d+%/gi, 'confidence').replace(/\b\d+ (reports?|OTX pulses?|pulses?)\b/gi, '$1').trim();
 }
-function fingerprint(f) {
-  const lines = [...new Set((f.evidence || []).map(normLine).filter(Boolean))].sort();
+
+// What makes a finding "the same" for acknowledgements: its evidence with every
+// timestamp, relative age and repeat counter removed, wherever they appear in a
+// line and in whichever format the code that wrote it used (engine.fmtTs, ISO,
+// toLocaleString, "3 h ago"). test/fingerprint.test.js checks each format.
+const COUNTED = 'hits?|times?|events?|connections?|connects?|attempts?|failures?|reports?|OTX pulses?|pulses?|lines?|errors?|matches|occurrences?|requests?|queries|blocks?|denials?|launches|runs?|sightings?';
+const RULES = [
+  [/\b\d{4}-\d\d-\d\d(?:[ T]\d\d:\d\d(?::\d\d)?(?:\.\d+)?(?:Z|[+-]\d\d:?\d\d)?)?/g, '<t>'],            // 2026-10-22[ 17:56:45][Z]
+  [/\b\d{1,2}\/\d{1,2}\/\d{2,4}(?:,?\s+\d{1,2}:\d\d(?::\d\d)?(?:\s*[AP]M)?)?/gi, '<t>'],                        // 10/22/2026, 5:56:45 PM
+  [/\b\d{1,2}:\d\d(?::\d\d)?\s*[AP]M\b/gi, '<t>'],                                                                  // a bare 5:56 PM
+  [/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}\b/g, '<t>'],
+  [/\(?\b\d+(?:\.\d+)?\s*(?:s|sec|secs|seconds?|m|min|mins|minutes?|h|hrs?|hours?|d|days?|w|weeks?)\s+(?:ago|old)\b\)?/gi, '<ago>'],
+  [/\bfor\s+\d+(?:\.\d+)?\s*(?:min|mins|minutes?|h|hrs?|hours?|days?)\b/gi, 'for <ago>'],
+  [/\s*\(×\s*[\d,]+\)|\s*\([\d,]+\s*×\)|\b[\d,]+\s*×|×\s*[\d,]+\b/g, ''],                                         // (×12) 12× ×12
+  [new RegExp(`\\b\\d[\\d,]*\\s+(${COUNTED})\\b`, 'gi'), '$1'],                                                            // 1,589 hits
+  [/\bconfidence\s+\d+%/gi, 'confidence'],
+  [/\bseen\s+[\d,]+\s*(?:times?|x)\b/gi, 'seen'],
+];
+function normLine(l) {
+  let s = String(l);
+  for (const [re, to] of RULES) s = s.replace(re, to);
+  return s.replace(/\s+/g, ' ').replace(/\s+([,;)])/g, '$1').trim();
+}
+function hashLines(f, norm) {
+  const lines = [...new Set((f.evidence || []).map(norm).filter(Boolean))].sort();
   return crypto.createHash('sha1').update(lines.join('\n')).digest('hex').slice(0, 16);
 }
+function fingerprint(f) { return hashLines(f, normLine); }
+function fingerprintV1(f) { return hashLines(f, normLineV1); }
 
 class FindingState {
   constructor(store) {
     this.store = store;
     store.db.exec(SCHEMA);
+    if (!store.all('PRAGMA table_info(finding_acks)').some(c => c.name === 'until')) store.db.exec('ALTER TABLE finding_acks ADD COLUMN until INTEGER');
     if (!store.all('PRAGMA table_info(finding_snap)').some(c => c.name === 'acked')) store.db.exec('ALTER TABLE finding_snap ADD COLUMN acked INTEGER NOT NULL DEFAULT 0');
     this.lastSnap = (store.get('SELECT MAX(ts) AS t FROM finding_snap') || {}).t || 0;
   }
 
   // Adds fp / acked / ackChanged to each finding. Returns the number hidden.
   annotate(findings) {
-    const acks = new Map(this.store.all('SELECT id, fp, note, at FROM finding_acks').map(a => [a.id, a]));
-    let hidden = 0;
+    const acks = new Map(this.store.all('SELECT id, fp, note, at, until FROM finding_acks').map(a => [a.id, a]));
+    let hidden = 0; const now = Date.now();
     for (const f of findings) {
       f.fp = fingerprint(f);
+      Object.defineProperty(f, 'fpV1', { value: fingerprintV1(f), enumerable: false });   // matches state written before 1.4.0
       const a = acks.get(f.id);
       if (!a) continue;
-      if (a.fp === f.fp) { f.acked = { at: a.at, note: a.note }; hidden++; }
+      if (a.fp !== f.fp && a.fp === fingerprintV1(f)) { this.store.run('UPDATE finding_acks SET fp = ? WHERE id = ?', f.fp, f.id); a.fp = f.fp; }   // acknowledged before 1.4.0
+      if (a.until && now >= a.until) f.ackExpired = { at: a.at, note: a.note, until: a.until };   // time-limited acknowledgement ran out: look again
+      else if (a.fp === f.fp) { f.acked = { at: a.at, note: a.note, until: a.until || null }; hidden++; }
       else f.ackChanged = { at: a.at, note: a.note };   // acknowledged earlier, but something new appeared
     }
     return hidden;
   }
 
-  ack(id, fp, title, note) {
-    this.store.run(`INSERT INTO finding_acks(id, fp, title, note, at) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET fp = excluded.fp, title = excluded.title, note = excluded.note, at = excluded.at`, id, fp, String(title).slice(0, 300), String(note || '').slice(0, 500), Date.now());
+  // days > 0: the acknowledgement lapses after that many days even if nothing changes.
+  ack(id, fp, title, note, days = 0) {
+    const now = Date.now(), until = +days > 0 ? now + Math.min(+days, 3650) * D : null;
+    this.store.run(`INSERT INTO finding_acks(id, fp, title, note, at, until) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET fp = excluded.fp, title = excluded.title, note = excluded.note, at = excluded.at, until = excluded.until`, id, fp, String(title).slice(0, 300), String(note || '').slice(0, 500), now, until);
   }
   unack(id) { this.store.run('DELETE FROM finding_acks WHERE id = ?', id); }
-  acks() { return this.store.all('SELECT id, title, note, at FROM finding_acks ORDER BY at DESC'); }
+  acks() { return this.store.all('SELECT id, title, note, at, until FROM finding_acks ORDER BY at DESC'); }
 
   // Hourly snapshot of the findings, kept 31 days for the trend charts.
   snapshot(findings, force = false) {
@@ -85,7 +115,7 @@ class FindingState {
     for (const f of findings) {
       const t = then.get(f.id);
       if (!t) out.new.push(pick(f));
-      else if (t.fp !== f.fp && !f.acked) out.changed.push({ ...pick(f), was: t.sev !== f.sev ? t.sev : undefined });
+      else if (t.fp !== f.fp && t.fp !== f.fpV1 && !f.acked) out.changed.push({ ...pick(f), was: t.sev !== f.sev ? t.sev : undefined });
     }
     for (const [id, t] of then) if (!now.has(id)) out.resolved.push({ id, sev: t.sev, area: t.area, title: t.title });
     return out;
@@ -137,4 +167,4 @@ ${['high', 'medium', 'low', 'info'].map(s => `<div class="col-6 col-md-3"><div c
   }
 }
 
-module.exports = { FindingState, fingerprint, normLine };
+module.exports = { FindingState, fingerprint, fingerprintV1, normLine, normLineV1 };

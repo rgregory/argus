@@ -321,15 +321,25 @@ Supported formats are `plain` (IPs, CIDRs or domains, one per line), `wildcard` 
 
 Every five minutes Argus writes reports to `$ARGUS_HOME/data/reports/`: `latest.json`, `findings.csv`, `indicators.csv`, and one JSON file per day. Each morning it also writes `digest-YYYYMMDD.html`, a one-page summary of what's new, changed and resolved.
 
+### Who owns an IP, and cloud noise
+
+Argus keeps a local copy of the [iptoasn.com](https://iptoasn.com) table, about 7 MB downloaded weekly, and shows the owner (AS number and name) of every IP indicator. Lookups happen in memory, so nothing about your traffic is sent anywhere; `ARGUS_ASN=0` turns it off.
+
+Shared cloud addresses pick up abuse reports and OTX pulses from earlier tenants. When an outbound IP belongs to one of the owners in `ARGUS_TRUSTED_CLOUDS` (default Apple, Google, Amazon, Microsoft, Cloudflare), was flagged only by reputation sources, and was contacted only by Apple-signed programs or a signed browser, its finding is shown as low with a "toned down" line in its evidence. A high-severity feed match, a CrowdSec local detection or any inbound activity keeps the normal severity. `ARGUS_TRUSTED_CLOUDS=off` turns this off.
+
+### Allow list
+
+Indicators you've decided are fine can go on the allow list: an IP, an IPv4 range (`17.0.0.0/8`), a domain (covers its subdomains) or an AS number (`AS15169`). They raise no findings anywhere, including the Little Snitch and program views. Add entries under Indicators › Allow list, from an indicator's details (allow the IP, its AS or its domain), or with `ARGUS_ALLOW` in `argus.env`.
+
 ### Working through findings
 
-Open a finding to see its evidence. If it's expected, acknowledge it, with a note if you like: it leaves the counts and lists until something new shows up in its evidence, then returns marked "changed since acknowledged". Repeats of the same thing (a later timestamp, a higher repeat count) don't bring it back. **Acknowledge all** on the Findings tab does the same for every finding the current filters show, after a confirmation. The Overview's "Changed in the last 24 hours" card lists new, changed and resolved findings, and links to the day's digest.
+Open a finding to see its evidence. If it's expected, acknowledge it, with a note if you like: it leaves the counts and lists until something new shows up in its evidence, then returns marked "changed since acknowledged". Repeats of the same thing (a later timestamp, a higher repeat count) don't bring it back. **Acknowledge all** on the Findings tab does the same for every finding the current filters show, after a confirmation. Either can be time-limited (7, 30 or 90 days): when that runs out the finding comes back marked "acknowledgement expired", so nothing stays hidden forever by accident. The Overview's "Changed in the last 24 hours" card lists new, changed and resolved findings, and links to the day's digest.
 
 With endpoint telemetry installed, every process launch is also checked against [SigmaHQ](https://github.com/SigmaHQ/sigma)'s macOS process-creation rules, refreshed weekly. Rules that need fields Endpoint Security doesn't give Argus are skipped and listed under Sources & feeds.
 
 ### Trends and the weekly edition
 
-"Is it getting better?" on the Overview shows open high and medium findings at the end of each day for the last 30 days, over the number of security events per day, with a small chart for each area. The 24-hour clock at the top gets a dashed outline for a normal day, the average of the previous week, once there are three days of history.
+"Is it getting better?" on the Overview shows open high and medium findings at the end of each day for the last 30 days, over the number of security events per day, with a small chart for each area. A grey band shows what you've set aside: acknowledged findings and cloud reputation hits toned down to low, so a falling line can be told apart from one you've cleared by hand. The 24-hour clock at the top gets a dashed outline for a normal day, the average of the previous week, once there are three days of history.
 
 Every Monday morning (`ARGUS_WEEKLY_DAY`, `ARGUS_DIGEST_HOUR`) Argus writes **The Argus Weekly** to `data/reports/`: a one-page front page with what's new, fixed and still open, the month's trend, set-up problems, first-time programs and Argus's own health. "This week's edition" on the Overview opens the current one at any time, and its button prints it or saves it as a PDF.
 
@@ -488,6 +498,7 @@ Divide the line count by 600 to get events per second. The dashboard's Throughpu
 | `server.js` | HTTP service and API |
 | `lib/engine.js` | macOS log analyzer (it also runs in a browser) |
 | `lib/intel.js` | Indicators, scoring, OSINT providers |
+| `lib/asn.js` | Local IP-to-owner (ASN) table |
 | `lib/feeds.js` | Threat feeds |
 | `lib/crowdsec.js` | Decisions stream and alerts |
 | `lib/ingest.js` | Inbox, syslog spool, Pi-hole |

@@ -442,6 +442,7 @@
               <input class="form-control form-control-sm w-auto flex-fill" placeholder="Search findings and evidence" x-model.debounce.250ms="fQ">
               <label class="form-check form-switch m-0" x-show="ackedCount()"><input class="form-check-input" type="checkbox" x-model="showAcked"><span class="form-check-label small" x-text="'Show acknowledged (' + ackedCount() + ')'"></span></label>
               <div class="ms-auto btn-list">
+                <span x-show="unackedShown().length"><select class="form-select form-select-sm w-auto d-inline-block" x-model.number="ackDays" @click.stop title="How long to hide it"><option :value="0">until it changes</option><option :value="7">for 7 days</option><option :value="30">for 30 days</option><option :value="90">for 90 days</option></select></span>
                 <button class="btn btn-sm" x-show="unackedShown().length" :disabled="ackBusy" @click="ackAll()" :title="'Acknowledge every finding the filters are showing'"><i class="ti ti-checks"></i> <span x-text="'Acknowledge all (' + unackedShown().length + ')'"></span></button>
                 <button class="btn btn-sm" @click="csv('argus-findings', filteredFindings().map(f => ({id: f.id, severity: f.sev, area: f.area, title: f.title, count: f.count, detail: f.detail, evidence: f.evidence.join(' | ')})))"><i class="ti ti-download"></i> CSV</button>
               </div>
@@ -455,6 +456,7 @@
                     <span class="flex-fill" :class="f.acked && 'text-secondary'" x-text="f.title"></span>
                     <span class="badge bg-secondary-lt" x-show="f.acked">acknowledged</span>
                     <span class="badge bg-orange-lt" x-show="f.ackChanged" title="You acknowledged this earlier; something new has appeared in its evidence">changed since acknowledged</span>
+                    <span class="badge bg-orange-lt" x-show="f.ackExpired" :title="f.ackExpired ? 'Acknowledged ' + fmt(f.ackExpired.at) + (f.ackExpired.note ? ' (' + f.ackExpired.note + ')' : '') + '; that ran out ' + fmt(f.ackExpired.until) : ''">acknowledgement expired</span>
                     <span class="text-secondary small" x-text="f.source"></span>
                     <button class="btn btn-sm btn-ghost-primary" x-show="f.indicator" @click.stop="openIndicator(f.indicator.type, f.indicator.value)">Details</button>
                   </div>
@@ -465,12 +467,13 @@
                       <template x-if="!f.acked">
                         <div class="d-flex gap-2 align-items-center flex-fill">
                           <input class="form-control form-control-sm" placeholder="Note (optional): why this is expected" x-model="ackNote" @keydown.enter="ackFinding(f)">
+                          <select class="form-select form-select-sm w-auto" x-model.number="ackDays" @click.stop title="How long to hide it"><option :value="0">until it changes</option><option :value="7">for 7 days</option><option :value="30">for 30 days</option><option :value="90">for 90 days</option></select>
                           <button class="btn btn-sm" :disabled="ackBusy" @click="ackFinding(f)"><i class="ti ti-check"></i> Acknowledge</button>
                         </div>
                       </template>
                       <template x-if="f.acked">
                         <div class="d-flex gap-2 align-items-center flex-fill small text-secondary">
-                          <span class="flex-fill" x-text="'Acknowledged ' + fmt(f.acked.at) + (f.acked.note ? ': ' + f.acked.note : '') + '. Hidden until something new shows up in its evidence.'"></span>
+                          <span class="flex-fill" x-text="'Acknowledged ' + fmt(f.acked.at) + (f.acked.note ? ': ' + f.acked.note : '') + (f.acked.until ? '. Hidden until ' + fmt(f.acked.until) + ', or sooner if something new shows up in its evidence.' : '. Hidden until something new shows up in its evidence.')"></span>
                           <button class="btn btn-sm" :disabled="ackBusy" @click="ackFinding(f, true)">Un-acknowledge</button>
                         </div>
                       </template>
@@ -494,6 +497,23 @@
                 <div class="col-auto"><button class="btn btn-primary" :disabled="lookupBusy || !lookupQ"><span class="spinner-border spinner-border-sm me-2" x-show="lookupBusy"></span><i class="ti ti-search me-1" x-show="!lookupBusy"></i>Look up</button></div>
               </form>
               <div class="text-danger small mt-2" x-show="lookupErr" x-text="lookupErr"></div>
+            </div>
+          </div>
+          <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">Allow list</h3><span class="ms-2 text-secondary small">Indicators you've decided are fine raise no findings. IPs, IPv4 ranges (17.0.0.0/8), domains (cover subdomains) or AS numbers (AS15169).</span></div>
+            <div class="card-body">
+              <form class="row g-2 align-items-center" @submit.prevent="addAllow(allowQ, allowNote)">
+                <div class="col-md-4"><input class="form-control form-control-sm" placeholder="IP, CIDR, domain or AS number" x-model="allowQ"></div>
+                <div class="col-md"><input class="form-control form-control-sm" placeholder="Note (optional)" x-model="allowNote"></div>
+                <div class="col-auto"><button class="btn btn-sm" :disabled="!allowQ"><i class="ti ti-plus"></i> Add</button></div>
+              </form>
+              <div class="small text-secondary mt-2" x-show="!allow.length">Nothing on it yet. You can also add entries from an indicator's details, or with ARGUS_ALLOW in argus.env.</div>
+              <div class="d-flex flex-wrap gap-2 mt-2">
+                <template x-for="a in allow" :key="a.entry">
+                  <span class="badge bg-secondary-lt d-inline-flex align-items-center gap-1" :title="(a.note || '') + (a.at ? ' · added ' + fmt(a.at) : '')"><span class="mono" x-text="a.entry"></span><span class="text-secondary" x-show="a.note" x-text="'· ' + a.note"></span>
+                    <a href="#" class="ms-1" x-show="!a.fixed" @click.prevent="removeAllow(a.entry)" title="Remove"><i class="ti ti-x"></i></a></span>
+                </template>
+              </div>
             </div>
           </div>
           <div class="card">
@@ -520,7 +540,7 @@
                 <tbody>
                   <template x-for="o in ind.rows" :key="o.type + o.value">
                     <tr class="clickable" @click="openIndicator(o.type, o.value)">
-                      <td><span class="mono" x-text="o.value"></span> <span class="badge bg-secondary-lt" x-text="o.type"></span></td>
+                      <td><span class="mono" x-text="o.value"></span> <span class="badge bg-secondary-lt" x-text="o.type"></span><span class="badge bg-green-lt" x-show="o.allowed" :title="'On your allow list: ' + o.allowed">allowed</span><div class="small text-secondary" x-show="o.owner" x-text="o.owner"></div></td>
                       <td><span class="badge" :class="riskBadge(o.risk)" x-text="o.risk + (o.risk_score ? ' ' + o.risk_score : '')"></span></td>
                       <td class="small text-secondary" x-text="(o.reasons[0] || '') + (o.reasons.length > 1 ? ' (+' + (o.reasons.length - 1) + ')' : '')"></td>
                       <td class="small" x-text="o.sources.join(', ')"></td>
@@ -1115,6 +1135,8 @@
                 <div class="text-secondary" x-text="r.inputs.pihole.configured ? (r.inputs.pihole.url + ' · polled ' + ago(r.inputs.pihole.lastPoll) + (r.inputs.pihole.error ? ' · ' + r.inputs.pihole.error : '')) : 'Set PIHOLE_URL and PIHOLE_PASSWORD'"></div></div>
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">IntelOwl</strong><span class="badge" :class="r.inputs.intelowl.configured ? 'bg-green-lt' : 'bg-secondary-lt'" x-text="r.inputs.intelowl.configured ? 'configured' : 'not configured'"></span></div>
                 <div class="text-secondary" x-text="r.inputs.intelowl.configured ? r.inputs.intelowl.url + ' · playbook ' + r.inputs.intelowl.playbook + ' (runs on flagged indicators and manual lookups)' : 'Set INTELOWL_URL and INTELOWL_TOKEN'"></div></div>
+              <div class="list-group-item" x-show="r.asn"><div class="d-flex"><strong class="flex-fill">IP owners (ASN table)</strong><span class="badge" :class="!r.asn.enabled ? 'bg-secondary-lt' : r.asn.ranges ? 'bg-green-lt' : 'bg-orange-lt'" x-text="!r.asn.enabled ? 'off' : r.asn.ranges ? 'ok' : 'not loaded'"></span></div>
+                <div class="text-secondary" x-text="!r.asn.enabled ? 'ARGUS_ASN=0' : (r.asn.ranges ? num(r.asn.ranges) + ' ranges from iptoasn.com · updated ' + ago(r.asn.updated) + ' · looked up locally' : 'downloading the table from iptoasn.com') + (r.asn.error ? ' · ' + r.asn.error : '')"></div></div>
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">CrowdSec</strong><span class="badge" :class="r.crowdsec.error ? 'bg-red-lt' : 'bg-green-lt'" x-text="r.crowdsec.error ? 'error' : 'ok'"></span></div>
                 <div class="text-secondary" x-text="num(r.crowdsec.decisions) + ' decisions · ' + (r.crowdsec.error || 'stream synced ' + ago(r.crowdsec.lastStream))"></div></div>
             </div></div></div>
@@ -1312,7 +1334,7 @@
             <button type="button" class="btn-close" @click="detail = null"></button>
           </div>
           <div class="modal-body">
-            <div class="small text-secondary mb-3" x-text="detail.type + ' · sources: ' + detail.sources.join(', ') + ' · first ' + fmt(detail.first_seen) + ' · last ' + fmt(detail.last_seen) + ' · ' + detail.hits + ' hits'"></div>
+            <div class="small text-secondary mb-3" x-text="detail.type + (detail.owner ? ' · ' + detail.owner : '') + ' · sources: ' + detail.sources.join(', ') + ' · first ' + fmt(detail.first_seen) + ' · last ' + fmt(detail.last_seen) + ' · ' + detail.hits + ' hits'"></div>
             <div class="small mb-3" x-show="detail.context"><strong>Context:</strong> <span x-text="detail.context"></span></div>
             <div class="mb-3" x-show="detail.reasons.length"><strong class="small">Why it is flagged</strong>
               <ul class="small mb-0"><template x-for="x in detail.reasons" :key="x"><li x-text="x"></li></template></ul></div>
@@ -1331,6 +1353,12 @@
             </table>
           </div>
           <div class="modal-footer">
+            <span class="small text-secondary me-auto" x-show="detail.allowed" x-text="'On your allow list (' + detail.allowed + '): raises no findings.'"></span>
+            <div class="btn-list me-auto" x-show="!detail.allowed">
+              <button class="btn btn-sm" @click="addAllow(detail.value)" :title="'Never raise findings for ' + detail.value"><i class="ti ti-shield-check"></i> Allow <span x-text="detail.type === 'ip' ? 'this IP' : 'this domain'"></span></button>
+              <button class="btn btn-sm" x-show="detail.owner" @click="addAllow(detail.owner.split(' ')[0], detail.owner)" :title="'Allow every address in ' + detail.owner"><span x-text="'Allow ' + (detail.owner || '').split(' ')[0]"></span></button>
+              <button class="btn btn-sm" x-show="detail.type === 'domain' && detail.value.split('.').length > 2" @click="addAllow(detail.value.split('.').slice(-2).join('.'))" x-text="'Allow ' + detail.value.split('.').slice(-2).join('.')"></button>
+            </div>
             <button class="btn" @click="lookupQ = detail.value; lookup()"><i class="ti ti-search"></i> Re-check all sources</button>
             <button class="btn btn-primary" @click="detail = null">Close</button>
           </div>
@@ -1350,8 +1378,8 @@ function argus() {
     tab: 'overview', macTab: 'access', openFinding: null,
     fSev: ['high', 'medium', 'low'], fArea: '', fQ: '', fLimit: 100,
     ind: { total: 0, rows: [] }, iRisk: 'flagged', iType: '', iSource: '', iQ: '', iOffset: 0,
-    detail: null, sg: null, sgQ: '', sgAll: false, dos: null, dosBusy: false, dosErr: '', findQ: '', findRes: [], findBusy: false, alertMsg: '', lookupQ: '', lookupBusy: false, lookupErr: '',
-    hideCollector: true, showPassing: false, showAcked: false, ackNote: '', ackBusy: false, thirdPartyTcc: true, showScans: false,
+    allow: [], allowQ: '', allowNote: '', allowLoaded: false, detail: null, sg: null, sgQ: '', sgAll: false, dos: null, dosBusy: false, dosErr: '', findQ: '', findRes: [], findBusy: false, alertMsg: '', lookupQ: '', lookupBusy: false, lookupErr: '',
+    hideCollector: true, showPassing: false, showAcked: false, ackNote: '', ackDays: 0, ackBusy: false, thirdPartyTcc: true, showScans: false,
     macTabs: [{ id: 'access', label: 'Access' }, { id: 'permissions', label: 'Permissions & Gatekeeper' }, { id: 'persistence', label: 'Persistence' },
       { id: 'network', label: 'Network' }, { id: 'crashes', label: 'Crashes' }, { id: 'system', label: 'System' }],
     get tabs() {
@@ -1395,9 +1423,25 @@ function argus() {
       if (t === 'indicators') this.loadIndicators();
       this.$nextTick(() => this.charts());
     },
+    async loadAllow() { try { this.allow = await (await fetch('/api/allow')).json(); } catch (e) { /* shown elsewhere */ } },
+    async addAllow(entry, note) {
+      try {
+        const res = await fetch('/api/allow', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entry, note: note || '' }) });
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+        this.allowQ = ''; this.allowNote = '';
+        if (this.detail) this.detail = Object.freeze({ ...this.detail, allowed: j.entry });
+        await Promise.all([this.loadAllow(), this.loadIndicators(), this.load(true)]);
+      } catch (e) { this.error = 'Could not add to the allow list: ' + e.message; }
+    },
+    async removeAllow(entry) {
+      try { await fetch('/api/allow/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entry }) }); await Promise.all([this.loadAllow(), this.loadIndicators(), this.load(true)]); }
+      catch (e) { this.error = 'Could not remove: ' + e.message; }
+    },
     async loadIndicators() {
       const p = new URLSearchParams({ risk: this.iRisk, type: this.iType, source: this.iSource, q: this.iQ, limit: 200, offset: this.iOffset });
       try { this.ind = Object.freeze(await (await fetch('/api/indicators?' + p)).json()); } catch (e) { this.error = 'Could not load indicators: ' + e.message; }
+      if (!this.allowLoaded) { this.allowLoaded = true; this.loadAllow(); }
     },
     async openIndicator(type, value) {
       try {
@@ -1585,12 +1629,14 @@ function argus() {
       const n = d.days.length, day = t => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
       const hi = d.total.high, me = d.total.medium;
       const b = (s, v) => `<b style="color:${this.sevColor(s)}">${v}</b>`;
-      return `Open findings at the end of each day for the last ${n} days, over security events per day. Since ${day(d.days[0])}: high ${b('high', hi[0])} → ${b('high', hi[n - 1])}, medium ${b('medium', me[0])} → ${b('medium', me[n - 1])}.`;
+      const aside = this.trendAside(d), set = aside[n - 1];
+      return `Open findings at the end of each day for the last ${n} days, over security events per day. Since ${day(d.days[0])}: high ${b('high', hi[0])} → ${b('high', hi[n - 1])}, medium ${b('medium', me[0])} → ${b('medium', me[n - 1])}.`
+        + (aside.some(Boolean) ? ` The grey band is what you've set aside: <b>${set}</b> acknowledged or toned down today.` : '');
     },
     trendSvg() {
       const d = this.trendData(); if (!d) return '';
       const W = 1100, H = 250, l = 36, r = 110, t = 16, b = 30, n = d.days.length;
-      const hi = d.total.high, me = d.total.medium, lmax = Math.max(1, ...hi, ...me), emax = Math.max(1, ...d.events);
+      const hi = d.total.high, me = d.total.medium, aside = this.trendAside(d), lmax = Math.max(1, ...hi, ...me, ...aside), emax = Math.max(1, ...d.events);
       const x = i => l + (W - l - r) * (n === 1 ? .5 : i / (n - 1)), y = v => t + (H - t - b) * (1 - v / lmax);
       const bw = Math.max(2, (W - l - r) / n * .55);
       const out = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Open findings per day">`];
@@ -1602,6 +1648,12 @@ function argus() {
         arr.forEach((v, i) => out.push(`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${i === n - 1 ? 4 : 2}" fill="${this.sevColor(s)}"><title>${this.esc(new Date(d.days[i]).toLocaleDateString())}: ${v} ${s}</title></circle>`));
         out.push(`<text x="${x(n - 1) + 10}" y="${y(arr[n - 1]) + 4}" style="font:600 13px Fraunces,Georgia,serif;fill:${this.sevColor(s)}">${arr[n - 1]} ${s}</text>`);
       };
+      if (aside.some(Boolean)) {
+        const pts = aside.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+        out.push(`<polygon points="${x(0).toFixed(1)},${H - b} ${pts} ${x(n - 1).toFixed(1)},${H - b}" fill="var(--muted)" opacity=".16"/><polyline points="${pts}" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity=".7"/>`);
+        aside.forEach((v, i) => out.push(`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="5" fill="transparent"><title>${this.esc(new Date(d.days[i]).toLocaleDateString())}: ${v} set aside (${(d.total.acked || [])[i] || 0} acknowledged, ${(d.total.toned || [])[i] || 0} toned down)</title></circle>`));
+        out.push(`<text x="${x(n - 1) + 10}" y="${y(aside[n - 1]) + 4}" style="font:600 12px Fraunces,Georgia,serif;fill:var(--muted)">${aside[n - 1]} set aside</text>`);
+      }
       line(me, 'medium', 2); line(hi, 'high', 3);
       const ticks = n > 2 ? [0, Math.floor((n - 1) / 2), n - 1] : [0, n - 1];
       ticks.forEach(i => out.push(`<text x="${x(i)}" y="${H - 10}" text-anchor="middle" font-size="11">${this.esc(new Date(d.days[i]).toLocaleDateString([], { month: 'short', day: 'numeric' }))}</text>`));
@@ -1609,6 +1661,7 @@ function argus() {
       out.push('</svg>');
       return out.join('');
     },
+    trendAside(d) { const a = d.total.acked || [], t = d.total.toned || []; return d.days.map((_, i) => (a[i] || 0) + (t[i] || 0)); },
     trendAreas() {
       const d = this.trendData(); if (!d) return [];
       const n = d.days.length, wk = Math.max(0, d.days.findIndex(t => t >= Date.now() - 7 * 864e5) - 1);
@@ -1865,7 +1918,7 @@ function argus() {
     async ackFinding(f, undo) {
       this.ackBusy = true;
       try {
-        const res = await fetch('/api/findings/' + (undo ? 'unack' : 'ack'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: f.id, note: this.ackNote }) });
+        const res = await fetch('/api/findings/' + (undo ? 'unack' : 'ack'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: f.id, note: this.ackNote, days: this.ackDays }) });
         if (!res.ok) throw new Error((await res.json()).error || ('HTTP ' + res.status));
         this.ackNote = ''; this.openFinding = null; await this.load(true);
       } catch (e) { this.error = 'Could not update the finding: ' + e.message; }
@@ -1877,11 +1930,11 @@ function argus() {
       if (!list.length) return;
       const by = s => list.filter(f => f.sev === s).length;
       const parts = ['high', 'medium', 'low', 'info'].filter(by).map(s => by(s) + ' ' + s);
-      const note = prompt(`Acknowledge ${list.length} finding${list.length === 1 ? '' : 's'} (${parts.join(', ')})?\n\nEach comes back if new evidence appears. Note (optional):`, '');
+      const note = prompt(`Acknowledge ${list.length} finding${list.length === 1 ? '' : 's'} (${parts.join(', ')})?\n\n${this.ackDays ? `Hidden for ${this.ackDays} days, or until` : 'Each comes back if'} new evidence appears. Note (optional):`, '');
       if (note === null) return;
       this.ackBusy = true;
       try {
-        const res = await fetch('/api/findings/ack-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: list.map(f => f.id), note }) });
+        const res = await fetch('/api/findings/ack-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: list.map(f => f.id), note, days: this.ackDays }) });
         if (!res.ok) throw new Error((await res.json()).error || ('HTTP ' + res.status));
         this.openFinding = null; await this.load(true);
       } catch (e) { this.error = 'Could not acknowledge the findings: ' + e.message; }

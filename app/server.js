@@ -10,6 +10,7 @@ const { Store } = require('./lib/store');
 const { Feeds } = require('./lib/feeds');
 const { CrowdSec } = require('./lib/crowdsec');
 const { Intel } = require('./lib/intel');
+const { Asn } = require('./lib/asn');
 const { Throughput } = require('./lib/throughput');
 const { MacIngest, SyslogTail, PiHole } = require('./lib/ingest');
 const { FindingState } = require('./lib/findings');
@@ -25,6 +26,8 @@ const tp = new Throughput(store);
 const feeds = new Feeds(store);
 const cs = new CrowdSec();
 const intel = new Intel(store, feeds, cs);
+const asn = new Asn();
+intel.asn = asn;
 const mac = new MacIngest(store, intel, tp);
 const syslog = new SyslogTail(store, intel, tp);
 const pihole = new PiHole(mac, intel, store, tp);
@@ -74,7 +77,7 @@ function buildReport() {
     dns: mac.dnsReport ? mac.dnsReport.dns : null,
     intel: intel.counts(),
     crowdsec: cs.status(),
-    feeds: feeds.status(), providers: intel.providerStatus(),
+    feeds: feeds.status(), asn: asn.status(), providers: intel.providerStatus(),
     syslog: syslog.status(),
     inputs: { collector: mac.status(), pihole: pihole.status(), intelowl: { configured: !!(cfg.intelowl.url && cfg.intelowl.token), url: cfg.intelowl.publicUrl || cfg.intelowl.url, playbook: cfg.intelowl.playbook } },
     throughput: tp.summary(24, 10),
@@ -105,10 +108,12 @@ function indicatorsCsv(filter = 'flagged') {
 // ------------------------------------------------------------------- loops
 async function main() {
   feeds.loadCache();
+  asn.load();
   every('ingest', cfg.ingestEvery, async () => { await mac.cycle(); syslog.cycle(); tp.flush(); }, log);
   every('pihole', cfg.pihole.every, () => pihole.poll(), log);
   every('crowdsec', 60e3, () => cs.poll(), log);
   every('feeds', 10 * 60e3, () => feeds.refresh(false), log);
+  every('asn', 6 * 3600e3, () => asn.refresh(false), log);
   every('intel', cfg.osint.autoEvery, () => intel.tick(), log);
   every('report', 60e3, async () => { buildReport(); await alerts.process(report); }, log);
   every('export', 5 * 60e3, async () => { exportFiles(); }, log);
@@ -201,6 +206,13 @@ async function main() {
     if (!d) return res.status(404).json({ error: 'not found' });
     res.json(d);
   });
+  app.get('/api/allow', (req, res) => res.json(intel.allowEntries()));
+  app.post('/api/allow', (req, res) => {
+    const e = intel.allowAdd(req.body && req.body.entry, req.body && req.body.note);
+    if (!e) return res.status(400).json({ error: 'not an IP, IPv4 CIDR, domain or AS number' });
+    buildReport(); res.json({ ok: true, entry: e });
+  });
+  app.post('/api/allow/remove', (req, res) => { intel.allowRemove(req.body && req.body.entry); buildReport(); res.json({ ok: true }); });
   app.post('/api/lookup', async (req, res) => {
     try { res.json(await intel.lookup(String((req.body && req.body.value) || ''))); }
     catch (e) { res.status(400).json({ error: e.message }); }
@@ -217,7 +229,7 @@ async function main() {
     const id = String((req.body && req.body.id) || '');
     const f = (report || buildReport()).findings.find(x => x.id === id);
     if (!f) return res.status(404).json({ error: 'no such finding (the report may have changed; reload)' });
-    fstate.ack(f.id, f.fp, f.title, (req.body && req.body.note) || '');
+    fstate.ack(f.id, f.fp, f.title, (req.body && req.body.note) || '', +(req.body && req.body.days) || 0);
     buildReport(); res.json({ ok: true });
   });
   // Bulk acknowledge: the ids the Findings tab is showing (its filters applied).
@@ -226,7 +238,8 @@ async function main() {
     if (!ids.size) return res.status(400).json({ error: 'no findings given' });
     const note = String((req.body && req.body.note) || '');
     const list = (report || buildReport()).findings.filter(f => ids.has(f.id) && !f.acked);
-    fstate.store.tx(() => { for (const f of list) fstate.ack(f.id, f.fp, f.title, note); });
+    const days = +(req.body && req.body.days) || 0;
+    fstate.store.tx(() => { for (const f of list) fstate.ack(f.id, f.fp, f.title, note, days); });
     log.info(`acknowledged ${list.length} finding(s) in bulk`);
     buildReport(); res.json({ ok: true, acked: list.length, missing: ids.size - list.length });
   });

@@ -97,7 +97,8 @@ function analyzeLs(hs, add) {
   if (!n.n) return { available: false };
   const flagged = hs.store.all(`SELECT f.path, f.dir, f.ip, f.host, f.port, f.connects, f.denies, f.bytes_out, o.risk, o.reasons FROM ls_flows f
     JOIN observables o ON ((o.value = f.ip AND o.type = 'ip') OR (f.host != '' AND o.value = f.host AND o.type = 'domain')) WHERE f.last_seen > ? AND o.risk_score >= 40 ORDER BY o.risk_score DESC LIMIT 200`, since);
-  const allowed = flagged.filter(f => f.connects > 0 || f.bytes_out > 0);
+  const ok = (v, t) => hs.intel && v && hs.intel.allowedBy(v, t);   // on your allow list
+  const allowed = flagged.filter(f => (f.connects > 0 || f.bytes_out > 0) && !ok(f.ip, 'ip') && !(f.host && ok(f.host, 'domain')));
   if (allowed.length) add({ sev: allowed.some(f => f.risk === 'malicious') ? 'high' : 'medium', area: 'Network', title: `${plural(new Set(allowed.map(f => f.path)).size, 'program')} exchanged traffic with flagged destinations (Little Snitch)`, source: 'Little Snitch + threat intel',
     detail: 'Little Snitch allowed these connections; the destination is flagged by a feed, CrowdSec or an OSINT source. Consider a deny rule and check the program.',
     evidence: allowed.map(f => `${f.path} ${f.dir === 'in' ? '←' : '→'} ${f.host || f.ip}:${f.port} [${f.risk}] sent ${mb(f.bytes_out)} — ${(JSON.parse(f.reasons || '[]')[0] || '')}`) });
@@ -173,7 +174,7 @@ function analyzeNet(hs, add) {
     if (!s.cls) return e;
     return { team: s.team || e.team || '', platform: s.cls === 'apple' ? 1 : 0, adhoc: s.cls === 'adhoc' ? 1 : 0, first_seen: e.first_seen ?? 0, cls: s.cls };
   };
-  const flagged = ip => hs.store.get('SELECT risk, risk_score, reasons FROM observables WHERE value = ? AND type = \'ip\' AND risk_score >= 40', ip);
+  const flagged = ip => (hs.intel && hs.intel.allowedBy(ip, 'ip')) ? null : hs.store.get('SELECT risk, risk_score, reasons FROM observables WHERE value = ? AND type = \'ip\' AND risk_score >= 40', ip);
   const byProg = new Map();
   for (const r of rows) {
     let p = byProg.get(r.path);

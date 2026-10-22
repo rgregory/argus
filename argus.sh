@@ -32,6 +32,7 @@ REPO="$(cd "$(dirname "$0")" && pwd)"
 # silently resolve to the same directory as this default and mask which
 # config file is actually being read. Override with your own ARGUS_HOME if
 # you want a different location; keep it lowercase to avoid the same trap.
+[ -n "${ARGUS_HOME:-}" ] && ARGUS_HOME_SET=1 || ARGUS_HOME_SET=0
 ARGUS_HOME="${ARGUS_HOME:-$HOME/.argus}"
 CFG_DIR="$ARGUS_HOME/config"
 ENV_FILE="$CFG_DIR/argus.env"
@@ -56,6 +57,36 @@ log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m ok\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m  !\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+
+# Where the running container's /data comes from: $ARGUS_HOME/data on the host.
+running_home() {
+  command -v container >/dev/null 2>&1 || return 0
+  container inspect "$NAME" 2>/dev/null | tr ',{}' '\n\n\n' \
+    | sed -n 's/.*"source" *: *"\(\/[^"]*\)\/data".*/\1/p' | head -1
+}
+
+# ARGUS_HOME wasn't set and the default has no config: adopt the folder the
+# running container was started from, so restart/up keep working. Otherwise
+# point at any config sitting in a known older location.
+resolve_home() {
+  [ -f "$ENV_FILE" ] && return 0
+  local h; h="$(running_home)"
+  if [ -n "$h" ] && [ "$h" != "$ARGUS_HOME" ] && [ -f "$h/config/argus.env" ] && [ "$ARGUS_HOME_SET" != 1 ]; then
+    warn "using ARGUS_HOME=$h (the running container's config). Add 'export ARGUS_HOME=$h' to ~/.zshrc to make it explicit"
+    ARGUS_HOME="$h"; CFG_DIR="$ARGUS_HOME/config"; ENV_FILE="$CFG_DIR/argus.env"; RUNTIME_ENV="$CFG_DIR/runtime.env"; DATA_DIR="$ARGUS_HOME/data"
+  fi
+}
+
+# Dies before anything is stopped or changed when there is no config.
+require_config() {
+  [ -f "$ENV_FILE" ] && return 0
+  local c found=""
+  for c in "$HOME/sync/containers/argus" "$HOME/.argus" "$(running_home)"; do
+    [ -n "$c" ] && [ "$c" != "$ARGUS_HOME" ] && [ -f "$c/config/argus.env" ] && { found="$c"; break; }
+  done
+  [ -n "$found" ] && die "no config at $ENV_FILE, but there is one in $found. Run: export ARGUS_HOME=$found (and add it to ~/.zshrc). Don't run init; it would start a new config"
+  die "no config yet: run ./argus.sh init"
+}
 
 # Read KEY from argus.env without sourcing it (values may contain spaces).
 env_val() {
@@ -93,7 +124,7 @@ preflight() {
   [ "$(uname -s)" = "Darwin" ] || die "run this on the Mac"
   command -v container >/dev/null || die "Apple's 'container' CLI not found (https://github.com/apple/container)"
   container system status >/dev/null 2>&1 || { log "starting container services"; container system start; }
-  [ -f "$ENV_FILE" ] || die "no config yet: run ./argus.sh init"
+  require_config
 }
 
 exists()  { container inspect "$1" >/dev/null 2>&1; }
@@ -389,7 +420,7 @@ cmd_status() {
 }
 
 cmd_install_collector() {
-  [ -f "$ENV_FILE" ] || die "run ./argus.sh init first"
+  require_config
   local inbox me uid
   inbox="$(env_val ARGUS_INBOX /Users/Shared/Argus/inbox)"
   me="$(id -un)"; uid="$(id -u)"
@@ -512,7 +543,7 @@ cmd_uninstall_collector() {
 ES_WANT="exec btm_launch_item_add btm_launch_item_remove authentication xp_malware_detected xp_malware_remediated sudo su profile_add profile_remove tcc_modify openssh_login screensharing_attach login_login"
 
 cmd_install_telemetry() {
-  [ -f "$ENV_FILE" ] || die "run ./argus.sh init first"
+  require_config
   local inbox me home avail ev events=() xml=""
   inbox="$(env_val ARGUS_INBOX /Users/Shared/Argus/inbox)"; me="$(id -un)"; home="$HOME"
   local SPOOL; SPOOL="$(dirname "$inbox")/spool"
@@ -637,7 +668,7 @@ restart_if_running() {
 }
 
 stream_on() {
-  [ -f "$ENV_FILE" ] || die "run ./argus.sh init first"
+  require_config
   [ "$(env_val ARGUS_SYSLOG 1)" = "1" ] || die "the syslog listener is off (ARGUS_SYSLOG=0 in argus.env)"
   local dest tcp udp mode
   dest="$(stream_target)"
@@ -756,13 +787,15 @@ cmd_destroy() {
   local v; for v in $VOLUMES; do container volume delete "$v" >/dev/null 2>&1 && ok "deleted volume $v" || true; done
 }
 
+case "${1:-}" in init) ;; *) resolve_home ;; esac
+
 case "${1:-}" in
   init) shift; cmd_init "$@" ;;
   build) cmd_build ;;
   builder-reset) builder_reset "$(env_val ARGUS_BUILD_DNS '1.1.1.1 9.9.9.9')" ;;
   up|start) cmd_up ;;
   down|stop) cmd_down ;;
-  restart) cmd_down; cmd_up ;;
+  restart) preflight; container image inspect "$IMAGE" >/dev/null 2>&1 || die "image $IMAGE not found: run ./argus.sh build"; cmd_down; cmd_up ;;
   status) cmd_status ;;
   logs) shift; cmd_logs "$@" ;;
   shell) cmd_shell ;;

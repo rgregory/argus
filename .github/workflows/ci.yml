@@ -30,5 +30,8 @@ jobs:
       - name: JavaScript syntax
         run: for f in app/server.js app/lib/*.js; do node --check "$f"; done
 
+      - name: Unit tests
+        run: node --test test/*.test.js
+
       - name: Dashboard access-control smoke test
         run: bash .github/smoke-test.sh

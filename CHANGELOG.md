@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **IP owners.** A local copy of the iptoasn.com table (about 7 MB, refreshed weekly; lookups never leave the Mac) shows the AS number and name of every IP indicator, in the Indicators table, indicator details and threat-intel findings. Status is under Sources & feeds. `ARGUS_ASN=0` turns it off. The cloud tone-down now uses it, so an IP flagged only by OTX is recognised as Google's or Amazon's too.
+- **Allow list.** IPs, IPv4 ranges, domains (with subdomains) and AS numbers you've decided are fine raise no findings, in threat intel, Little Snitch and the program views. Add them under Indicators › Allow list, from an indicator's details (this IP, its AS, its domain), or with `ARGUS_ALLOW` in `argus.env`.
+- **Time-limited acknowledgements.** Acknowledge for 7, 30 or 90 days, singly or with Acknowledge all. When the time runs out the finding comes back marked "acknowledgement expired".
+- **What you've set aside, on the trend chart.** "Is it getting better?" shows a grey band for acknowledged findings and cloud reputation hits toned down to low.
+- **Unit tests** in `test/` (`node --test test/*.test.js`, also run in CI): fingerprint stability for every time format the code writes, acknowledgement expiry and upgrade, the allow list and the trend counts.
+
+### Changed
+
+- **Fingerprints ignore times and counters anywhere in a line**, in every format Argus writes (ISO, `fmtTs`, locale dates and times, "3 h ago", "(×12)", "1,589 hits"). Acknowledgements, alerts and the 24-hour changes made before this update still match: older fingerprints are recognised and upgraded, so nothing comes back or alerts again because of the change.
+
+### Fixed
+
+- **`restart` no longer stops Argus when it can't find the config.** It checks first and stops with a message naming the folder that has one (`~/sync/containers/argus`, `~/.argus` or the folder the running container was started from). With `ARGUS_HOME` unset and no config at the default, `up` and `restart` now use the running container's folder and say so.
+
 ## 1.3.1 (2026-10-22)
 
 ### Added

@@ -40,9 +40,18 @@ class Trends {
     const days_ = [...new Set([...empty, ...rows.map(r => r.ts)])].sort((a, b) => a - b);
     const idx = new Map(days_.map((t, i) => [t, i]));
     const zero = () => days_.map(() => 0);
-    const total = { high: zero(), medium: zero(), low: zero() }, areas = {};
+    const total = { high: zero(), medium: zero(), low: zero(), acked: zero(), toned: zero() }, areas = {};
+    // Set aside: acknowledged high/medium findings, and Threat intel findings toned
+    // down to low (that area only goes low when a cloud reputation hit is toned down).
+    let ackRows = [];
+    try {
+      ackRows = this.store.all(`WITH d AS (SELECT MAX(ts) AS ts FROM finding_snap WHERE ts > ? GROUP BY date(ts / 1000, 'unixepoch', 'localtime'))
+        SELECT s.ts, COUNT(*) AS n FROM finding_snap s JOIN d ON s.ts = d.ts WHERE s.id != '' AND s.acked = 1 AND s.sev IN ('high', 'medium') GROUP BY s.ts`, Date.now() - days * D);
+    } catch (e) { /* older table */ }
+    for (const r of ackRows) { const i = idx.get(r.ts); if (i !== undefined) total.acked[i] += r.n; }
     for (const r of rows) {
       const i = idx.get(r.ts);
+      if (r.sev === 'low' && r.area === 'Threat intel') total.toned[i] += r.n;
       if (total[r.sev]) total[r.sev][i] += r.n;
       if (r.sev === 'high' || r.sev === 'medium') {
         const a = areas[r.area] || (areas[r.area] = { high: zero(), medium: zero() });

@@ -3,7 +3,7 @@
 // enriched with OSINT providers, and scored.
 const dns = require('node:dns').promises;
 const engine = require('./engine');
-const { cfg, logger, fetchJson, classifyValue, dayKey } = require('./util');
+const { cfg, env, logger, fetchJson, classifyValue, dayKey, ipv4ToInt, cidrRange } = require('./util');
 
 const log = logger('intel');
 const D = 86400e3;
@@ -141,6 +141,55 @@ class Intel {
     this.busy = new Set();
     this.feedVersion = -1; this.csVersion = -1;
     this.lastError = {};
+    store.db.exec("CREATE TABLE IF NOT EXISTS allowlist (entry TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)");
+    this.allowRules = null;
+  }
+
+  // ---------------------------------------------------------------- allow list
+  // Indicators you've decided are fine raise no findings. Entries: an IP, an IPv4
+  // CIDR, a domain (covers its subdomains) or an AS number ("AS15169"). They come
+  // from ARGUS_ALLOW in argus.env and from the dashboard.
+  static normAllow(raw) {
+    const e = String(raw || '').trim().toLowerCase().replace(/^\*\./, '').replace(/\.$/, '');
+    if (/^as\d+$/.test(e)) return e.toUpperCase();
+    if (/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(e)) return cidrRange(e) ? e : null;
+    const c = classifyValue(e);
+    return c && (c.type === 'ip' || c.type === 'domain') ? c.value : null;
+  }
+  allowEntries() {
+    const fromEnv = env('ARGUS_ALLOW', '').split(/[,\s]+/).map(Intel.normAllow).filter(Boolean).map(entry => ({ entry, note: 'from argus.env', at: 0, fixed: true }));
+    return [...fromEnv, ...this.store.all('SELECT entry, note, at FROM allowlist ORDER BY at DESC')];
+  }
+  allowAdd(raw, note = '') {
+    const entry = Intel.normAllow(raw);
+    if (!entry) return null;
+    this.store.run('INSERT OR REPLACE INTO allowlist(entry, note, at) VALUES (?, ?, ?)', entry, String(note).slice(0, 300), Date.now());
+    this.allowRules = null;
+    return entry;
+  }
+  allowRemove(raw) { this.store.run('DELETE FROM allowlist WHERE entry = ?', Intel.normAllow(raw) || String(raw)); this.allowRules = null; }
+  allowedBy(value, type) {
+    if (!this.allowRules) {
+      const r = { ips: new Map(), ranges: [], domains: new Map(), asns: new Map() };
+      for (const { entry } of this.allowEntries()) {
+        if (/^AS\d+$/.test(entry)) r.asns.set(+entry.slice(2), entry);
+        else if (entry.includes('/')) { const [a, b] = cidrRange(entry); r.ranges.push([a, b, entry]); }
+        else if (/^[\d.]+$|:/.test(entry)) r.ips.set(entry, entry);
+        else r.domains.set(entry, entry);
+      }
+      this.allowRules = r;
+    }
+    const r = this.allowRules;
+    if (type === 'ip') {
+      if (r.ips.has(value)) return r.ips.get(value);
+      const n = ipv4ToInt(value);
+      if (n !== null) for (const [a, b, e] of r.ranges) if (n >= a && n <= b) return e;
+      if (r.asns.size && this.asn) { const a = this.asn.lookup(value); if (a && r.asns.has(a.asn)) return r.asns.get(a.asn); }
+      return '';
+    }
+    const parts = String(value).split('.');
+    for (let i = 0; i < parts.length - 1; i++) { const d = parts.slice(i).join('.'); if (r.domains.has(d)) return d; }
+    return '';
   }
 
   // ---------------------------------------------------------------- observe
@@ -290,6 +339,9 @@ class Intel {
     return this.detail(c.value, c.type);
   }
 
+  owner(value, type) { const a = type === 'ip' && this.asn ? this.asn.lookup(value) : null; return a ? a.label : ''; }
+  withOwner(r) { return { ...rowOut(r), owner: this.owner(r.value, r.type), allowed: this.allowedBy(r.value, r.type) }; }
+
   detail(value, type) {
     const o = this.store.get('SELECT * FROM observables WHERE value = ? AND type = ?', value, type);
     if (!o) return null;
@@ -298,7 +350,7 @@ class Intel {
     const feeds = this.store.all('SELECT feed, matched, label, first_seen, last_seen FROM feed_hits WHERE value = ? AND type = ?', value, type)
       .map(f => ({ ...f, name: (this.feeds.defs.find(d => d.id === f.feed) || {}).name || f.feed }));
     const pending = this.providers.filter(p => p.types.includes(type) && p.enabled() && !enrich.some(e => e.provider === p.id)).map(p => p.name);
-    return { ...rowOut(o), enrichments: enrich, feedHits: feeds, crowdsec: type === 'ip' ? this.cs.match(value) : null, pending };
+    return { ...this.withOwner(o), enrichments: enrich, feedHits: feeds, crowdsec: type === 'ip' ? this.cs.match(value) : null, pending };
   }
 
   list({ q = '', type = '', risk = '', source = '', limit = 200, offset = 0 } = {}) {
@@ -311,7 +363,7 @@ class Intel {
     const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
     const total = this.store.db.prepare(`SELECT COUNT(*) AS n FROM observables ${w}`).get(...p).n;
     const rows = this.store.db.prepare(`SELECT * FROM observables ${w} ORDER BY risk_score DESC, last_seen DESC LIMIT ? OFFSET ?`).all(...p, Math.min(+limit || 200, 5000), +offset || 0);
-    return { total, rows: rows.map(rowOut) };
+    return { total, rows: rows.map(r => this.withOwner(r)) };
   }
 
   counts() {
@@ -330,9 +382,10 @@ class Intel {
     const list = String(process.env.ARGUS_TRUSTED_CLOUDS ?? 'Apple,Google,Amazon,Microsoft,Cloudflare').split(',').map(x => x.trim()).filter(Boolean);
     if (!list.length || /^(off|0|no|none)$/i.test(list[0])) return '';
     if (/^17\./.test(o.value) && list.some(x => /^apple$/i.test(x))) return 'Apple';
-    const text = o.reasons.join(' ') + ' ' + this.store.all("SELECT summary FROM enrichments WHERE value = ? AND type = 'ip' AND error IS NULL", o.value).map(e => e.summary).join(' ');
-    const alias = { amazon: 'amazon|aws', microsoft: 'microsoft|azure' };
-    return list.find(x => new RegExp(`\\b(${alias[x.toLowerCase()] || x.toLowerCase().replace(/[^a-z0-9 ]/g, '')})\\b`, 'i').test(text)) || '';
+    const a = this.asn && this.asn.lookup(o.value);
+    const text = (a ? a.name + ' ' : '') + o.reasons.join(' ') + ' ' + this.store.all("SELECT summary FROM enrichments WHERE value = ? AND type = 'ip' AND error IS NULL", o.value).map(e => e.summary).join(' ');
+    const alias = { amazon: 'amazon|aws', microsoft: 'microsoft|azure', cloudflare: 'cloudflare', apple: 'apple' };
+    return list.find(x => new RegExp(`\\b(${alias[x.toLowerCase()] || x.toLowerCase().replace(/[^a-z0-9 ]/g, '')})`, 'i').test(text)) || '';
   }
   reputationOnly(o) {
     if (o.reasons.some(r => /^CrowdSec local detection/.test(r))) return false;
@@ -354,7 +407,8 @@ class Intel {
   }
 
   findings(hs) {
-    const rows = this.store.all('SELECT * FROM observables WHERE risk_score >= 40 ORDER BY risk_score DESC, last_seen DESC LIMIT 300');
+    const rows = this.store.all('SELECT * FROM observables WHERE risk_score >= 40 ORDER BY risk_score DESC, last_seen DESC LIMIT 400')
+      .filter(r => !this.allowedBy(r.value, r.type)).slice(0, 300);
     return rows.map(r => {
       const o = rowOut(r);
       const src = o.sources;
@@ -369,7 +423,7 @@ class Intel {
       }
       return { sev: toned ? 'low' : o.risk_score >= 75 ? 'high' : 'medium', area: 'Threat intel', source: 'feeds / CrowdSec / OSINT',
         title: `${o.risk === 'malicious' ? 'Malicious' : 'Suspicious'} ${o.type === 'ip' ? 'IP' : 'domain'} ${what}: ${o.value}`,
-        detail: 'Matched a threat feed, CrowdSec, or an OSINT source. Open it in Indicators for full results.',
+        detail: 'Matched a threat feed, CrowdSec, or an OSINT source. Open it in Indicators for full results.' + (this.owner(o.value, o.type) ? ` Owner: ${this.owner(o.value, o.type)}.` : ''),
         evidence: [toned, ...o.reasons, `sources: ${src.join(', ')}`, o.context ? `context: ${o.context}` : '', `first seen ${new Date(o.first_seen).toLocaleString()}, last ${new Date(o.last_seen).toLocaleString()}, ${o.hits} hits`].filter(Boolean),
         count: o.hits, indicator: { value: o.value, type: o.type } };
     });
