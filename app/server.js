@@ -39,7 +39,7 @@ const started = Date.now();
 function buildReport() {
   const m = mac.report || engine.finalize(engine.newState());
   const dnsFindings = mac.dnsReport ? mac.dnsReport.findings.filter(f => f.area === 'DNS' || f.area === 'Ollama') : [];
-  const findings = [...m.findings, ...dnsFindings, ...intel.findings(), ...cs.findings()]
+  const findings = [...m.findings, ...dnsFindings, ...intel.findings(mac.hostsec), ...cs.findings()]
     .sort((a, b) => engine.SEV_ORDER[a.sev] - engine.SEV_ORDER[b.sev] || (b.count || 0) - (a.count || 0));
   // Stable, content-derived id instead of array position: buildReport() reruns every
   // 60s (server timer) and the dashboard polls /api/report every 60s too, replacing
@@ -219,6 +219,16 @@ async function main() {
     if (!f) return res.status(404).json({ error: 'no such finding (the report may have changed; reload)' });
     fstate.ack(f.id, f.fp, f.title, (req.body && req.body.note) || '');
     buildReport(); res.json({ ok: true });
+  });
+  // Bulk acknowledge: the ids the Findings tab is showing (its filters applied).
+  app.post('/api/findings/ack-all', (req, res) => {
+    const ids = new Set(Array.isArray(req.body && req.body.ids) ? req.body.ids.map(String) : []);
+    if (!ids.size) return res.status(400).json({ error: 'no findings given' });
+    const note = String((req.body && req.body.note) || '');
+    const list = (report || buildReport()).findings.filter(f => ids.has(f.id) && !f.acked);
+    fstate.store.tx(() => { for (const f of list) fstate.ack(f.id, f.fp, f.title, note); });
+    log.info(`acknowledged ${list.length} finding(s) in bulk`);
+    buildReport(); res.json({ ok: true, acked: list.length, missing: ids.size - list.length });
   });
   app.post('/api/findings/unack', (req, res) => {
     fstate.unack(String((req.body && req.body.id) || '')); buildReport(); res.json({ ok: true });

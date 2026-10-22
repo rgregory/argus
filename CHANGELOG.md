@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.1 (2026-10-22)
+
+### Added
+
+- **Acknowledge all.** A button on the Findings tab acknowledges every unacknowledged finding the current filters show (severity, area, search), after a confirmation with the counts by severity and an optional shared note. Each one still comes back if new evidence appears.
+- **Cloud reputation noise toned down.** An outbound IP owned by Apple, Google, Amazon, Microsoft or Cloudflare, flagged only by reputation sources (no high-severity feed, no CrowdSec local detection) and contacted only by Apple-signed programs or a signed browser, now shows as low instead of medium or high, with a "toned down" line in its evidence. Shared cloud addresses collect abuse reports and OTX pulses from earlier tenants. `ARGUS_TRUSTED_CLOUDS` sets the owners; `off` disables it.
+
+### Fixed
+
+- **Acknowledged indicator findings no longer come straight back.** Their "first seen …, last …, N hits" line changed on every sighting, so the fingerprint changed and the finding reappeared as "changed since acknowledged". That line, and reputation counters such as AbuseIPDB confidence and report counts and the OTX pulse count, are now ignored when fingerprinting. Indicator findings acknowledged before this fix need acknowledging once more.
+
 ## 1.3.0 (2026-10-22)
 
 ### Added

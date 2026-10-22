@@ -321,7 +321,39 @@ class Intel {
     return { ...r, feedHits: fh };
   }
 
-  findings() {
+  // Reputation hits on the big clouds' shared addresses are mostly noise: earlier
+  // tenants' abuse reports and crowd-sourced pulses stick to the IP. An outbound IP
+  // owned by one of these, flagged only by reputation (no high-severity feed, no
+  // CrowdSec local detection) and contacted only by Apple-signed programs or a
+  // browser, is shown as low instead of medium/high. ARGUS_TRUSTED_CLOUDS=off disables.
+  cloudOwner(o) {
+    const list = String(process.env.ARGUS_TRUSTED_CLOUDS ?? 'Apple,Google,Amazon,Microsoft,Cloudflare').split(',').map(x => x.trim()).filter(Boolean);
+    if (!list.length || /^(off|0|no|none)$/i.test(list[0])) return '';
+    if (/^17\./.test(o.value) && list.some(x => /^apple$/i.test(x))) return 'Apple';
+    const text = o.reasons.join(' ') + ' ' + this.store.all("SELECT summary FROM enrichments WHERE value = ? AND type = 'ip' AND error IS NULL", o.value).map(e => e.summary).join(' ');
+    const alias = { amazon: 'amazon|aws', microsoft: 'microsoft|azure' };
+    return list.find(x => new RegExp(`\\b(${alias[x.toLowerCase()] || x.toLowerCase().replace(/[^a-z0-9 ]/g, '')})\\b`, 'i').test(text)) || '';
+  }
+  reputationOnly(o) {
+    if (o.reasons.some(r => /^CrowdSec local detection/.test(r))) return false;
+    const high = this.store.all("SELECT feed FROM feed_hits WHERE value = ? AND type = 'ip'", o.value)
+      .some(h => (this.feeds.defs.find(d => d.id === h.feed) || {}).severity === 'high');
+    return !high && o.sources.every(x => x === 'connection' || x === 'resolved' || x === 'dns');
+  }
+  // Who connected: signed paths from net_seen when known, else the process names in the context.
+  trustedCallers(o, hs) {
+    const BROWSER = /\/(Firefox|Firefox Developer Edition|Safari|Google Chrome|Google Chrome Beta|Brave Browser|Microsoft Edge|Arc|Chromium|Vivaldi|Opera|Orion|Zen Browser|Zen)\.app\//;
+    const paths = hs ? hs.store.all('SELECT DISTINCT path FROM net_seen WHERE remote = ?', o.value).map(r => r.path) : [];
+    if (paths.length) {
+      const who = paths.map(p => { const c = hs.signer(p).cls; return c === 'apple' ? `${p.split('/').pop()} (Apple)` : BROWSER.test(p) && /^(devid|appstore|apple)$/.test(c) ? `${p.split('/').pop()} (signed browser)` : null; });
+      return who.every(Boolean) ? [...new Set(who)].sort().join(', ') : '';
+    }
+    const procs = String(o.context || '').split(' → ')[0].split(', ').map(x => x.trim()).filter(Boolean);
+    const ok = n => /^com\.apple\./.test(n) || /^(firefox|safari|google chrome( helper.*)?|brave browser( helper.*)?|microsoft edge( helper.*)?|arc|chromium|vivaldi|opera|orion|zen)$/i.test(n);
+    return procs.length && procs.every(ok) ? [...new Set(procs)].sort().join(', ') + ' (by name)' : '';
+  }
+
+  findings(hs) {
     const rows = this.store.all('SELECT * FROM observables WHERE risk_score >= 40 ORDER BY risk_score DESC, last_seen DESC LIMIT 300');
     return rows.map(r => {
       const o = rowOut(r);
@@ -330,10 +362,15 @@ class Intel {
         ? (src.includes('download') ? 'downloaded from' : src.includes('dns') || src.includes('dns-heuristic') ? 'queried' : src.includes('manual') ? 'looked up' : 'seen')
         : src.includes('download') ? 'downloaded from' : src.includes('connection') ? 'in active connections' : src.includes('ssh') ? 'tried SSH' : src.includes('screensharing') ? 'tried Screen Sharing'
           : src.includes('firewall') ? 'probed the firewall' : src.some(s => s.startsWith('syslog:')) ? `in syslog from ${src.find(s => s.startsWith('syslog:')).slice(7)}` : src.includes('resolved') ? 'resolved from a domain' : 'seen';
-      return { sev: o.risk_score >= 75 ? 'high' : 'medium', area: 'Threat intel', source: 'feeds / CrowdSec / OSINT',
+      let toned = '';
+      if (o.type === 'ip' && this.reputationOnly(o)) {
+        const owner = this.cloudOwner(o), callers = owner && this.trustedCallers(o, hs);
+        if (owner && callers) toned = `toned down to low: ${owner} address, reputation reports only, contacted by ${callers}`;
+      }
+      return { sev: toned ? 'low' : o.risk_score >= 75 ? 'high' : 'medium', area: 'Threat intel', source: 'feeds / CrowdSec / OSINT',
         title: `${o.risk === 'malicious' ? 'Malicious' : 'Suspicious'} ${o.type === 'ip' ? 'IP' : 'domain'} ${what}: ${o.value}`,
         detail: 'Matched a threat feed, CrowdSec, or an OSINT source. Open it in Indicators for full results.',
-        evidence: [...o.reasons, `sources: ${src.join(', ')}`, o.context ? `context: ${o.context}` : '', `first seen ${new Date(o.first_seen).toLocaleString()}, last ${new Date(o.last_seen).toLocaleString()}, ${o.hits} hits`].filter(Boolean),
+        evidence: [toned, ...o.reasons, `sources: ${src.join(', ')}`, o.context ? `context: ${o.context}` : '', `first seen ${new Date(o.first_seen).toLocaleString()}, last ${new Date(o.last_seen).toLocaleString()}, ${o.hits} hits`].filter(Boolean),
         count: o.hits, indicator: { value: o.value, type: o.type } };
     });
   }

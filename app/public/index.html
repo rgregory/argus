@@ -442,6 +442,7 @@
               <input class="form-control form-control-sm w-auto flex-fill" placeholder="Search findings and evidence" x-model.debounce.250ms="fQ">
               <label class="form-check form-switch m-0" x-show="ackedCount()"><input class="form-check-input" type="checkbox" x-model="showAcked"><span class="form-check-label small" x-text="'Show acknowledged (' + ackedCount() + ')'"></span></label>
               <div class="ms-auto btn-list">
+                <button class="btn btn-sm" x-show="unackedShown().length" :disabled="ackBusy" @click="ackAll()" :title="'Acknowledge every finding the filters are showing'"><i class="ti ti-checks"></i> <span x-text="'Acknowledge all (' + unackedShown().length + ')'"></span></button>
                 <button class="btn btn-sm" @click="csv('argus-findings', filteredFindings().map(f => ({id: f.id, severity: f.sev, area: f.area, title: f.title, count: f.count, detail: f.detail, evidence: f.evidence.join(' | ')})))"><i class="ti ti-download"></i> CSV</button>
               </div>
             </div>
@@ -1868,6 +1869,22 @@ function argus() {
         if (!res.ok) throw new Error((await res.json()).error || ('HTTP ' + res.status));
         this.ackNote = ''; this.openFinding = null; await this.load(true);
       } catch (e) { this.error = 'Could not update the finding: ' + e.message; }
+      this.ackBusy = false;
+    },
+    unackedShown() { return this.filteredFindings().filter(f => !f.acked); },
+    async ackAll() {
+      const list = this.unackedShown();
+      if (!list.length) return;
+      const by = s => list.filter(f => f.sev === s).length;
+      const parts = ['high', 'medium', 'low', 'info'].filter(by).map(s => by(s) + ' ' + s);
+      const note = prompt(`Acknowledge ${list.length} finding${list.length === 1 ? '' : 's'} (${parts.join(', ')})?\n\nEach comes back if new evidence appears. Note (optional):`, '');
+      if (note === null) return;
+      this.ackBusy = true;
+      try {
+        const res = await fetch('/api/findings/ack-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: list.map(f => f.id), note }) });
+        if (!res.ok) throw new Error((await res.json()).error || ('HTTP ' + res.status));
+        this.openFinding = null; await this.load(true);
+      } catch (e) { this.error = 'Could not acknowledge the findings: ' + e.message; }
       this.ackBusy = false;
     },
     ackedCount() { return this.r ? this.r.findings.filter(f => f.acked).length : 0; },

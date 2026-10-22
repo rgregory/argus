@@ -1,6 +1,6 @@
 {
   "name": "argus",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "macOS log + syslog analysis with CrowdSec, threat feeds and OSINT enrichment",
   "private": true,
   "main": "server.js",

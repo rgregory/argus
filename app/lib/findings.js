@@ -20,7 +20,11 @@ CREATE INDEX IF NOT EXISTS finding_snap_ts ON finding_snap(ts);
 const TS = /^\s*\d{4}-\d\d-\d\d[ T]\d\d:\d\d(:\d\d)?(\.\d+)?Z?\s*/;
 function normLine(l) {
   return String(l).replace(TS, '').replace(/\s*\(×\d+\)|\s*\(\d+×\)|\b\d+×/g, '')
-    .replace(/\b(last|first seen|updated|modified)\s+\d{4}-\d\d-\d\d[ T][\d:]+/gi, '$1').trim();
+    .replace(/\b(last|first seen|updated|modified)\s+\d{4}-\d\d-\d\d[ T][\d:]+/gi, '$1')
+    // indicator lines: "first seen 10/19/2026, 2:58:47 AM, last 10/22/2026, 5:56:45 PM, 44 hits"
+    .replace(/^first seen .*, last .*, \d+ hits$/i, 'first seen')
+    // reputation counters that drift with every refresh: "confidence 95%, 174 reports", "50 OTX pulses"
+    .replace(/\bconfidence \d+%/gi, 'confidence').replace(/\b\d+ (reports?|OTX pulses?|pulses?)\b/gi, '$1').trim();
 }
 function fingerprint(f) {
   const lines = [...new Set((f.evidence || []).map(normLine).filter(Boolean))].sort();

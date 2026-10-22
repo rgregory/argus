@@ -33,7 +33,7 @@ const cfg = {
   // 0 when the Mac streams its unified log live to the syslog listener (argus.sh stream on):
   // CrowdSec then reads the live copy, so the 5-minute batches are not written for it too.
   macosToCrowdsec: flag('ARGUS_MACOS_TO_CROWDSEC', true),
-  version: '1.3.0',
+  version: '1.3.1',
 };
 
 const ts = () => { const d = new Date(), z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`; };

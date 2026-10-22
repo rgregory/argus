@@ -323,7 +323,7 @@ Every five minutes Argus writes reports to `$ARGUS_HOME/data/reports/`: `latest.
 
 ### Working through findings
 
-Open a finding to see its evidence. If it's expected, acknowledge it, with a note if you like: it leaves the counts and lists until something new shows up in its evidence, then returns marked "changed since acknowledged". Repeats of the same thing (a later timestamp, a higher repeat count) don't bring it back. The Overview's "Changed in the last 24 hours" card lists new, changed and resolved findings, and links to the day's digest.
+Open a finding to see its evidence. If it's expected, acknowledge it, with a note if you like: it leaves the counts and lists until something new shows up in its evidence, then returns marked "changed since acknowledged". Repeats of the same thing (a later timestamp, a higher repeat count) don't bring it back. **Acknowledge all** on the Findings tab does the same for every finding the current filters show, after a confirmation. The Overview's "Changed in the last 24 hours" card lists new, changed and resolved findings, and links to the day's digest.
 
 With endpoint telemetry installed, every process launch is also checked against [SigmaHQ](https://github.com/SigmaHQ/sigma)'s macOS process-creation rules, refreshed weekly. Rules that need fields Endpoint Security doesn't give Argus are skipped and listed under Sources & feeds.
 
