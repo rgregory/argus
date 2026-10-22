@@ -592,6 +592,37 @@
                   <td class="text-end" x-text="num(p.remotes)"></td><td class="text-end" x-text="num(p.connects)"></td><td class="text-end" :class="p.denies && 'text-orange'" x-text="num(p.denies)"></td>
                   <td class="text-end nowrap" x-text="bytes(p.bytes_out)"></td><td class="text-end nowrap" x-text="bytes(p.bytes_in)"></td><td class="small nowrap" x-text="ago(p.last)"></td></tr></template></tbody></table></div></div></div>
 
+            <div class="col-12" x-show="r.hostsec.dnsAttribution && r.hostsec.dnsAttribution.available && r.hostsec.dnsAttribution.rows.length"><div class="card">
+              <div class="card-header"><h3 class="card-title">Flagged domains and the programs that used them (7 days)</h3><div class="card-actions small text-secondary">Pi-hole / threat intel joined to Little Snitch</div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Domain</th><th>Risk</th><th>Program</th><th class="text-end">Conns</th><th class="text-end">Denied</th><th>Last</th></tr></thead>
+                <tbody><template x-for="(d, i) in ((r.hostsec.dnsAttribution && r.hostsec.dnsAttribution.rows) || []).slice(0, 200)" :key="i"><tr :class="d.programs.length && d.risk === 'malicious' && 'table-danger'">
+                  <td class="small mono"><a href="#" @click.prevent="openIndicator('domain', d.domain)" x-text="d.domain"></a></td>
+                  <td><span class="badge" :class="d.risk === 'malicious' ? 'bg-red-lt' : 'bg-orange-lt'" x-text="d.risk"></span></td>
+                  <td class="small mono text-break" x-text="d.programs.length ? d.programs.map(p => p.path).join(' · ') : (d.queried ? 'queried, no connection from this Mac' : '—')"></td>
+                  <td class="text-end" x-text="d.programs.reduce((a, p) => a + p.connects, 0)"></td><td class="text-end" x-text="d.programs.reduce((a, p) => a + p.denies, 0)"></td>
+                  <td class="small nowrap" x-text="d.programs.length ? ago(Math.max(...d.programs.map(p => p.last))) : ''"></td></tr></template></tbody></table></div></div></div>
+
+            <div class="col-lg-6" x-show="r.hostsec.network && r.hostsec.network.available"><div class="card">
+              <div class="card-header"><h3 class="card-title">Network</h3><div class="card-actions small text-secondary" x-show="r.hostsec.network && r.hostsec.network.current" x-text="r.hostsec.network && r.hostsec.network.current ? (r.hostsec.network.current.ssid || 'no Wi-Fi') + ' · VPN ' + r.hostsec.network.current.vpn + ' · DNS ' + (r.hostsec.network.current.dns.join(', ') || 'none') : ''"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>When</th><th>Event</th></tr></thead>
+                <tbody>
+                  <template x-for="(e, i) in ((r.hostsec.network && r.hostsec.network.events) || []).slice(0, 150)" :key="i"><tr :class="e.open && 'table-danger'"><td class="small nowrap" x-text="fmt(e.at)"></td>
+                    <td class="small"><span class="badge me-1" :class="e.kind === 'joined' ? 'bg-azure-lt' : e.kind === 'vpn' ? 'bg-purple-lt' : 'bg-secondary-lt'" x-text="e.kind"></span><span x-text="e.detail"></span></td></tr></template>
+                  <tr x-show="!((r.hostsec.network && r.hostsec.network.events) || []).length"><td colspan="2" class="text-secondary">No network changes recorded yet.</td></tr>
+                </tbody></table></div>
+              <div class="card-footer small text-secondary" x-text="r.hostsec.network ? 'Known Wi-Fi networks: ' + ((r.hostsec.network.networks || []).map(n => n.ssid + ' (' + (n.security || '?') + ')').join(', ') || 'none') : ''"></div></div></div>
+            <div class="col-lg-6" x-show="r.hostsec.devices && r.hostsec.devices.available"><div class="card">
+              <div class="card-header"><h3 class="card-title">USB and Bluetooth devices</h3><div class="card-actions small text-secondary" x-show="r.hostsec.devices && r.hostsec.devices.available" x-text="r.hostsec.devices ? num(r.hostsec.devices.usb.length) + ' USB · ' + num(r.hostsec.devices.bt.length) + ' Bluetooth' : ''"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Device</th><th>Type</th><th>Detail</th></tr></thead>
+                <tbody>
+                  <template x-for="(c, i) in ((r.hostsec.devices && r.hostsec.devices.changes) || [])" :key="'c' + i"><tr class="table-warning"><td class="small"><span x-text="c.name"></span> <span class="badge bg-orange-lt">new</span></td><td class="small" x-text="c.kind + (c.storage ? ' · storage' : '')"></td><td class="small mono" x-text="fmt(c.at) + ' · ' + c.detail"></td></tr></template>
+                  <template x-for="(d, i) in ((r.hostsec.devices && r.hostsec.devices.usb) || [])" :key="'u' + i"><tr><td class="small" x-text="d.name"></td><td class="small" x-text="'USB' + (d.storage ? ' · storage' : '')"></td><td class="small mono" x-text="(d.vendor ? d.vendor + ' ' : '') + d.vid + ':' + d.pid"></td></tr></template>
+                  <template x-for="(d, i) in ((r.hostsec.devices && r.hostsec.devices.bt) || [])" :key="'b' + i"><tr><td class="small" x-text="d.name"></td><td class="small" x-text="'Bluetooth' + (d.connected ? ' · connected' : '')"></td><td class="small mono" x-text="d.type + ' ' + d.address"></td></tr></template>
+                </tbody></table></div></div></div>
+
             <div class="col-12"><div class="card">
               <div class="card-header"><h3 class="card-title">Programs with internet connections (24 h)</h3><div class="card-actions small text-secondary">from 5-minute connection snapshots, joined to running processes</div></div>
               <div class="table-responsive table-wrap"><table class="table table-sm card-table">
@@ -701,6 +732,17 @@
                     <td class="small"><template x-for="(v, j) in p.vulns.slice(0, 12)" :key="j"><span class="badge me-1 mb-1" :class="v.kev ? 'bg-red text-red-fg' : /CRITICAL|HIGH/.test(v.severity) ? 'bg-red-lt' : /MEDIUM|MODERATE/.test(v.severity) ? 'bg-orange-lt' : 'bg-secondary-lt'" :title="v.summary" x-text="v.id + (v.severity ? ' ' + v.severity.toLowerCase() : '')"></span></template></td></tr></template>
                   <tr x-show="!((r.vulns.brew && r.vulns.brew.packages) || []).filter(p => p.vulns.length).length"><td colspan="3" class="text-secondary" x-text="r.vulns.brew ? r.vulns.brew.source : ''"></td></tr>
                 </tbody></table></div></div></div>
+
+            <div class="col-12" x-show="r.hostsec && r.hostsec.images && r.hostsec.images.available"><div class="card">
+              <div class="card-header"><h3 class="card-title">Container images</h3><div class="card-actions small text-secondary" x-text="r.hostsec && r.hostsec.images && r.hostsec.images.tool ? 'scanned daily with ' + r.hostsec.images.tool : ''"></div></div>
+              <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+                <thead><tr><th>Image</th><th class="text-end">Critical</th><th class="text-end">High</th><th class="text-end">Fixable</th><th class="text-end">KEV</th><th>Worst</th><th>Scanned</th></tr></thead>
+                <tbody><template x-for="(im, i) in ((r.hostsec && r.hostsec.images && r.hostsec.images.images) || [])" :key="i"><tr :class="im.kev ? 'table-danger' : (im.counts.CRITICAL ? 'table-warning' : '')">
+                  <td class="small mono text-break" x-text="im.image"></td>
+                  <td class="text-end" x-text="im.error ? '—' : (im.counts.CRITICAL || 0)"></td><td class="text-end" x-text="im.error ? '—' : (im.counts.HIGH || 0)"></td>
+                  <td class="text-end" x-text="im.error ? '—' : im.fixable"></td><td class="text-end" x-text="im.error ? '—' : im.kev"></td>
+                  <td class="small"><span x-show="im.error" class="text-red" x-text="im.error"></span><template x-for="(v, j) in (im.top || []).slice(0, 4)" :key="j"><span class="badge me-1 mb-1" :class="v.kev ? 'bg-red text-red-fg' : v.severity === 'CRITICAL' ? 'bg-red-lt' : 'bg-orange-lt'" :title="v.pkg + ' ' + v.version + (v.fix ? ' → ' + v.fix : '')" x-text="v.id"></span></template></td>
+                  <td class="small nowrap" x-text="ago(im.scanned)"></td></tr></template></tbody></table></div></div></div>
 
             <div class="col-12" x-show="(r.vulns.pendingUpdates || []).length"><div class="card">
               <div class="card-header"><h3 class="card-title">Pending Apple updates</h3></div>

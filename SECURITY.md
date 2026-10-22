@@ -67,6 +67,8 @@ account only):
   per-program network destinations from Little Snitch, and hashes and SSH key
   fingerprints for the watched files. The watched files' contents are never
   copied, only hashed.
+- The Wi-Fi networks you join (name, BSSID, security), your DNS resolvers and
+  VPN state, and the names, IDs and serial numbers of USB and Bluetooth devices.
 
 The unified log itself cannot be parsed by a Linux container (it's a binary
 store only macOS's own `log` tool understands), which is the entire reason
@@ -95,6 +97,10 @@ does the container fall back to OSV.dev, and then it **sends the source
 repository URL and installed version of each Homebrew formula** you have
 installed (one batch a day, plus detail lookups for any advisories found).
 Upgrade Homebrew to 6.0.11 or later to keep that inventory local.
+
+**Container image scans**, if you install `grype` or `trivy`, run on the Mac
+under your account and download that scanner's vulnerability database. The
+images themselves are scanned locally; nothing about them is uploaded.
 
 **CrowdSec**, if `DISABLE_ONLINE_API=false` (the default), talks to
 `version.crowdsec.net` and the CrowdSec hub for collection updates, and

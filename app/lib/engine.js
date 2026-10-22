@@ -730,7 +730,7 @@
     'Check for updates automatically': ['high', 'medium'], 'Download updates automatically': ['low', 'low'],
     'Install Rapid Security Responses / system files': ['high', 'medium'], 'Install XProtect / security data': ['high', 'medium'],
     'XProtect definitions': ['medium', 'medium'], 'Automatic login': ['high', 'medium'], 'Guest account': ['medium', 'low'],
-    'Screen Sharing': ['medium', 'low'], 'File Sharing (SMB)': ['low', 'low'], 'Remote Apple Events': ['medium', 'medium'], 'FTP proxy': ['low', 'low'], 'XProtect bundle': ['medium', 'medium'],
+    'Screen Sharing': ['medium', 'low'], 'File Sharing (SMB)': ['low', 'low'], 'Remote Apple Events': ['medium', 'medium'], 'FTP proxy': ['low', 'low'], 'XProtect bundle': ['medium', 'medium'], 'Time Machine': ['high', 'low'], 'Automatic backups': ['medium', 'medium'],
   };
   function parsePosture(ctx) {
     const st = ctx.st, out = [], text = st.raw.posture;
@@ -746,7 +746,7 @@
     st.meta.os = (mac.match(/ProductVersion:\s*(\S+)/) || [])[1] || st.meta.os;
     st.meta.build = (mac.match(/BuildVersion:\s*(\S+)/) || [])[1] || st.meta.build;
     const host = get('Host'); if (host) st.meta.host = host.split('\n')[0].trim() || st.meta.host;
-    const row = (control, status, value, why, warnTitle) => out.push({ control, status, value: trunc(String(value).trim().split('\n')[0] || '—', 160), why, warnTitle });
+    const row = (control, status, value, why, warnTitle, failTitle) => out.push({ control, status, value: trunc(String(value).trim().split('\n')[0] || '—', 160), why, warnTitle, failTitle });
     const sip = get('SIP');
     if (sip) row('System Integrity Protection', /status:\s*enabled/i.test(sip) ? (/custom/i.test(sip) ? 'warn' : 'pass') : /disabled/i.test(sip) ? 'fail' : 'unknown', sip, 'Protects system files and processes from modification, even by root.');
     const gk = get('Gatekeeper');
@@ -786,6 +786,19 @@
       const m = l.match(/^(\S+):\s*(loaded|off)/); if (!m || !SHARE[m[1]]) continue;
       row(SHARE[m[1]][0], m[2] === 'loaded' ? 'warn' : 'pass', l, SHARE[m[1]][1], `${SHARE[m[1]][0]} is on`);
     }
+    const tmx = get('Time Machine');
+    if (tmx) {
+      const noDest = /No destinations configured/i.test(tmx) || !/^(Name|ID)\s*:/m.test(tmx);
+      const last = (tmx.match(/Last backup:\s*(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d [+-]\d{4})/) || [])[1];
+      const lastTs = last ? parseTs(last.replace(' +', '+').replace(' -', '-')) : null;
+      const age = lastTs ? Math.floor((st.ref - lastTs) / DAY) : null;
+      const auto = (tmx.match(/AutoBackup:\s*(\S+)/) || [])[1];
+      if (noDest) row('Time Machine', 'warn', 'No backup destination configured', 'A recent backup is what gets you back after ransomware, theft or a dead disk.', 'Time Machine has no backup destination');
+      else row('Time Machine', age === null ? 'unknown' : age > 7 ? 'fail' : age > 2 ? 'warn' : 'pass',
+        `${age === null ? 'last backup unknown' : `last backup ${last.slice(0, 16)} (${age} d ago)`}${auto === '0' ? ' · automatic backups off' : ''}`,
+        'A recent backup is what gets you back after ransomware, theft or a dead disk.', age !== null ? `Last Time Machine backup was ${age} days ago` : '', age !== null ? `Last Time Machine backup was ${age} days ago` : 'Time Machine has not completed a backup');
+      if (!noDest && auto === '0') row('Automatic backups', 'warn', 'AutoBackup = 0', 'Time Machine only backs up when you start it by hand.', 'Time Machine automatic backups are off');
+    }
     const xpb = get('XProtect');
     if (xpb) {
       const upd = (xpb.match(/XProtect updated:\s*(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)/) || [])[1];
@@ -799,7 +812,7 @@
       if (p.status !== 'fail' && p.status !== 'warn') continue;
       const sevs = POSTURE_SEV[p.control] || ['medium', 'low'];
       ctx.add({ sev: p.status === 'fail' ? sevs[0] : sevs[1], area: 'Posture',
-        title: p.status === 'fail' ? `${p.control} is off` : (p.warnTitle || `${p.control} needs attention`),
+        title: p.status === 'fail' ? (p.failTitle || `${p.control} is off`) : (p.warnTitle || `${p.control} needs attention`),
         detail: p.why, evidence: [p.value], source: 'posture snapshot' });
     }
   }

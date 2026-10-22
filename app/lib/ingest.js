@@ -7,7 +7,7 @@ const engine = require('./engine');
 const { HostSec } = require('./hostsec');
 const { Vulns } = require('./vulns');
 // inputs owned by hostsec.js / vulns.js, not by the log engine
-const EXT_FILES = /^(tcc-(system|user)\.tsv|quarantine\.tsv|brew-(versions|vulns)\.txt|software-updates\.txt|procs\.txt|fim\.txt|certs-(system|user)\.txt|browser-extensions\.txt)$/;
+const EXT_FILES = /^(tcc-(system|user)\.tsv|quarantine\.tsv|brew-(versions|vulns)\.txt|software-updates\.txt|procs\.txt|fim\.txt|certs-(system|user)\.txt|browser-extensions\.txt|network\.txt)$/;
 const { cfg, logger, fetchJson, walk, dayKey } = require('./util');
 
 const H = 3600e3;
@@ -176,6 +176,7 @@ class MacIngest {
       const counts = { high: 0, medium: 0, low: 0, info: 0 }; all.forEach(f => { counts[f.sev]++; });
       this.report.counts = counts;
       this.report.hostsec = hs.views; this.report.vulns = vu.view;
+      if (hs.views.network && hs.views.network.posture) this.report.posture = [...this.report.posture, ...hs.views.network.posture];
       this.extAt = Date.now();
     } catch (e) { this.log.error(`extensions: ${e.stack || e}`); }
     this.dnsReport = this.dnsSt.dns ? engine.finalize(this.dnsSt) : null;

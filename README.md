@@ -150,7 +150,7 @@ The biggest gap is the network. Once compromised, Argus could still reach the in
 
 macOS keeps its unified log in a binary format that only Apple's own `log` tool can read, so a Linux container can't open it. Some of the other things worth checking, like SIP and FileVault status, login history, or crash reports only root can read, also need a command run on the Mac itself. So Argus installs two small scheduled jobs on the Mac that gather this and drop it into an inbox folder, and the container reads that folder read-only.
 
-Both jobs run the same bash script, [`collector/argus-collect.sh`](collector/argus-collect.sh). It's about 420 lines of plain bash, and it's worth reading before you install it.
+Both jobs run the same bash script, [`collector/argus-collect.sh`](collector/argus-collect.sh). It's about 480 lines of plain bash, and it's worth reading before you install it.
 
 ### Why root
 
@@ -179,6 +179,7 @@ On every run:
 
 - Runs `log show` with a fixed filter over the time since its last run, so nothing is missed or read twice. The filter matches `sudo`, `authd`, `SecurityAgent`, `sshd`, Screen Sharing, screen lock and unlock, Gatekeeper (`syspolicyd`), XProtect, the application firewall, TCC permission events, background task management and Little Snitch, plus every fault-level message. After sleep or a reboot it catches up at most 60 minutes (`ARGUS_MAX_BACKLOG_MIN`).
 - Lists established TCP connections with `lsof`, and the running processes with `ps`, so each connection can be tied to a program.
+- Records the Wi-Fi network (`wdutil info`: SSID, BSSID, security), the DNS resolvers (`scutil --dns`), the default route and VPN state (`scutil --nc list`, and `mullvad status` if Mullvad is installed).
 - Moves new Endpoint Security events from the eslogger spool into the inbox, if you installed the optional telemetry (at most 64 MB a run, `ARGUS_ES_MAX_MB`).
 - If Little Snitch is installed and allows Terminal access, exports its traffic history for the same time window with `littlesnitch log-traffic`.
 
@@ -191,6 +192,7 @@ Once an hour:
 - Checks automatic login, the guest account, Screen Sharing, File Sharing, Remote Apple Events and the XProtect bundle's version and age, and (every 6 hours) lists pending updates with `softwareupdate --list --no-scan`.
 - Hashes the files most often abused for persistence or privilege: `/etc/hosts`, sudoers and `/etc/sudoers.d`, `/etc/pam.d`, sshd and ssh config, the system shell profiles, `/etc/periodic`, at jobs, authorization plugins, scripting additions and directory-service plug-ins, plus each account's `~/.ssh/authorized_keys` (with `ssh-keygen -l` fingerprints), `~/.ssh/config` and `rc`, and shell startup files. It records hashes, sizes and modes, never contents. It also reads the login and logout hook settings.
 - Lists the System keychain's certificates (`security find-certificate -Z`, names and hashes) and admin trust settings (`security dump-trust-settings -d`).
+- Lists USB and Bluetooth devices (`system_profiler SPUSBHostDataType SPBluetoothDataType`) and the Time Machine destination and last backup date (`tmutil destinationinfo`, the Time Machine preferences).
 
 Housekeeping:
 
@@ -225,6 +227,7 @@ The inbox folder itself is owned by root with mode `0700`, plus one access contr
 - the tail of Ollama's server log, if you have one at `~/.ollama/logs/server.log`
 - the last 30 days of download history from the quarantine database (`~/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2`, read-only): when, which app, and the file and page URLs where macOS recorded them
 - every 6 hours, an app inventory (`system_profiler SPApplicationsDataType`) and, if Homebrew is installed, `brew list --versions`, `brew info --json=v2 --installed` and, once a day, `brew vulns`
+- once a day, if `grype` or `trivy` is installed, a vulnerability scan of each image your running containers use: `container image save` to a temporary archive, scan, delete. The scanner downloads its own vulnerability database, so this is the one part of the collector that uses the network
 - every hour, browser extensions: manifests and install details from Chromium-family profiles (read with JavaScript for Automation), Firefox's `extensions.json`, Safari extensions from `pluginkit`, plus your login keychain's certificate names and your trust settings
 - Pi-hole's query log from inside its container, but only if you set `ARGUS_PIHOLE_QUERYLOG=1` (off by default; the Pi-hole API is the normal route)
 
@@ -308,10 +311,12 @@ Supported formats are `plain` (IPs, CIDRs or domains, one per line), `wildcard` 
 | Network | services listening beyond localhost; which program talks to which public address (from `lsof`, or from Little Snitch with bytes, denied attempts, accepted inbound connections and large uploads) |
 | Endpoint Security | suspicious command lines, launches from temp or hidden folders, Office/browser/chat apps starting shells, live background-item registrations, XProtect actions, failed authentication, sudo and su rejections, profile installs, live permission grants, first-seen third-party programs (optional telemetry) |
 | File integrity | changes to SSH keys, sudoers, PAM, sshd config, authorization plugins, login hooks, the hosts file, scheduled scripts and shell startup files, kept for 7 days |
+| Network hygiene | the Wi-Fi network and its security, open or new networks joined, DNS resolvers and VPN state over time; with `ARGUS_EXPECTED_DNS` / `ARGUS_EXPECT_VPN` set, DNS leaving your resolver and the VPN dropping; flagged domains traced to the program that used them (with Little Snitch) |
+| Devices | new USB devices (storage rated higher) and new Bluetooth devices |
 | Browser and certificates | sideloaded, unsigned or newly added browser extensions and ones with all-sites access plus powerful permissions; new System keychain certificates and newly trusted roots |
 | Downloads | where files came from (quarantine database), downloads straight from IP addresses or over plain HTTP; download hosts go through threat intel |
-| Vulnerabilities | macOS and Safari against Apple's security releases, cross-checked with CISA KEV; installed apps that predate KEV entries for their product; pending Apple updates; Homebrew advisories (`brew vulns`, or OSV.dev as a fallback) |
-| Posture | SIP, Gatekeeper, FileVault, firewall and stealth mode, Remote Login, automatic updates, automatic login, guest account, sharing services, and how old XProtect is. The dashboard lists failing checks and tucks passing ones behind a link |
+| Vulnerabilities | macOS and Safari against Apple's security releases, cross-checked with CISA KEV; installed apps that predate KEV entries for their product; pending Apple updates; Homebrew advisories (`brew vulns`, or OSV.dev as a fallback); container images (`grype` or `trivy`) |
+| Posture | SIP, Gatekeeper, FileVault, firewall and stealth mode, Remote Login, automatic updates, automatic login, guest account, sharing services, how old XProtect is, Time Machine backup age, Wi-Fi security, DNS resolvers and VPN. The dashboard lists failing checks and tucks passing ones behind a link |
 | System | crash and panic reports, memory-pressure kills, processes logging lots of faults, sleep and wake, install history, Apple container log errors, and whether the Ollama API is exposed |
 
 Every five minutes Argus writes reports to `$ARGUS_HOME/data/reports/`: `latest.json`, `findings.csv`, `indicators.csv`, and one JSON file per day.
@@ -461,6 +466,7 @@ Divide the line count by 600 to get events per second. The dashboard's Throughpu
 | `lib/ingest.js` | Inbox, syslog spool, Pi-hole |
 | `lib/hostsec.js` | Endpoint Security, TCC database, background-item changes, downloads |
 | `lib/hostsec-extra.js` | Program ↔ network, Little Snitch, file integrity, browser extensions, certificates |
+| `lib/hostsec-extra2.js` | Flagged domains ↔ programs, Wi-Fi/DNS/VPN, USB and Bluetooth devices, container image scans |
 | `lib/vulns.js` | Apple security releases, CISA KEV, app and Homebrew vulnerability matching |
 | `lib/store.js` | SQLite state (`node:sqlite`) |
 | `lib/throughput.js` | Event and byte counters for each input |

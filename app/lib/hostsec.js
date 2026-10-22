@@ -234,6 +234,11 @@ class HostSec {
     try { out.views.fim = X.analyzeFim(this, add); } catch (e) { log.error(`fim: ${e.stack}`); }
     try { out.views.extensions = X.analyzeExtensions(this, add); } catch (e) { log.error(`extensions: ${e.stack}`); }
     try { out.views.certs = X.analyzeCerts(this, add); } catch (e) { log.error(`certs: ${e.stack}`); }
+    const Y = require('./hostsec-extra2');
+    try { out.views.dnsAttribution = Y.analyzeDnsAttribution(this, add); } catch (e) { log.error(`dns attribution: ${e.stack}`); }
+    try { out.views.network = Y.analyzeNetwork(this, add); } catch (e) { log.error(`network: ${e.stack}`); }
+    try { out.views.devices = Y.analyzeDevices(this, add); } catch (e) { log.error(`devices: ${e.stack}`); }
+    try { out.views.images = Y.analyzeImages(this, add); } catch (e) { log.error(`images: ${e.stack}`); }
     return out;
   }
 

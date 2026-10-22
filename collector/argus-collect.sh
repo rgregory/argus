@@ -23,7 +23,7 @@
 # Compatible with macOS's bash 3.2.
 # =============================================================================
 set -uo pipefail
-VERSION="1.2.0"
+VERSION="1.3.0"
 
 INBOX="${ARGUS_INBOX:-/Users/Shared/Argus/inbox}"
 SPOOL="${ARGUS_SPOOL:-/Users/Shared/Argus/spool}"     # eslogger writes here (root-only)
@@ -117,6 +117,11 @@ posture() {
   for svc in com.apple.screensharing com.apple.smbd com.apple.ftp-proxy com.apple.AEServer; do
     if launchctl print "system/$svc" >/dev/null 2>&1 && ! printf '%s' "$dis" | grep -Eq "\"$svc\" => (disabled|true)"; then echo "$svc: loaded"; else echo "$svc: off"; fi
   done
+  echo; echo "== Time Machine"
+  tmutil destinationinfo 2>&1 | grep -E '^(Name|Kind|Mount Point|ID)|No destinations' | head -n 12
+  echo "AutoBackup: $(defaults read /Library/Preferences/com.apple.TimeMachine AutoBackup 2>/dev/null || echo unknown)"
+  local tm; tm=$(defaults read /Library/Preferences/com.apple.TimeMachine 2>/dev/null | grep -Eo '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8} [+-][0-9]{4}' | sort | tail -n 1)
+  [ -n "$tm" ] && echo "Last backup: $tm"
   echo; echo "== XProtect"
   defaults read /Library/Apple/System/Library/CoreServices/XProtect.bundle/Contents/Info.plist CFBundleShortVersionString 2>/dev/null | sed 's/^/XProtect version: /'
   stat -f 'XProtect updated: %Sm' -t '%Y-%m-%d %H:%M:%S' /Library/Apple/System/Library/CoreServices/XProtect.bundle 2>/dev/null
@@ -171,8 +176,25 @@ certs_system() {
   echo "== admin trust"; security dump-trust-settings -d 2>&1
 }
 
+# Wi-Fi network, DNS resolvers and VPN state (every run, so joins and DNS
+# changes are seen within 5 minutes). wdutil only shows the SSID to root.
+network_state() {
+  local m
+  echo "== wifi"; wdutil info 2>/dev/null | grep -E '^[[:space:]]+(SSID|BSSID|Security|Interface Name|Power|Primary IPv4|DNS Addresses)[[:space:]]+:' | sed 's/^ *//'
+  echo "== dns"; scutil --dns 2>/dev/null | awk '/^resolver #1/{f=1;next} /^resolver #/{f=0} f && /nameserver\[/ {print $3}' | head -n 8
+  echo "== route"; route -n get default 2>/dev/null | awk '/interface:|gateway:/ {print $1, $2}'
+  echo "== vpn"; scutil --nc list 2>/dev/null | grep -E '\(Connected\)' | sed 's/^ *//' | head -n 5
+  for m in /usr/local/bin/mullvad "/Applications/Mullvad VPN.app/Contents/Resources/mullvad"; do
+    [ -x "$m" ] && { echo "mullvad: $("$m" status 2>/dev/null | head -n 1)"; break; }
+  done
+}
+
+# USB and Bluetooth devices (hourly; new ones are reported)
+devices() { system_profiler -json -detailLevel mini SPUSBHostDataType SPUSBDataType SPBluetoothDataType 2>/dev/null; }
+
 snapshots() {
   local S="$INBOX/snapshots"
+  devices | put "$S/devices.json"
   fim | put "$S/fim.txt"
   certs_system | put "$S/certs-system.txt"
   posture | put "$S/posture.txt"
@@ -300,6 +322,7 @@ run_system() {
   ls_ship
   lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null | put "$INBOX/snapshots/established-tcp.txt"
   ps -axo pid=,ppid=,uid=,comm= 2>/dev/null | put "$INBOX/snapshots/procs.txt"
+  network_state | put "$INBOX/snapshots/network.txt"
   if stamp_due snapshots "$SNAPSHOT_MIN"; then snapshots; stamp_set snapshots; fi
   prune
   write_meta
@@ -381,6 +404,34 @@ browser_extensions() {
   printf '=== safari\n'; pluginkit -mAvvv -p com.apple.Safari.web-extension 2>/dev/null; pluginkit -mAvvv -p com.apple.Safari.extension 2>/dev/null
 }
 
+# Vulnerability scan of the images your running containers use, with grype or
+# trivy if installed (brew install grype). Daily; each image is saved to a temp
+# OCI archive, scanned offline-style by the tool, then the archive is deleted.
+image_scan() {
+  local tool ref tmp out safe
+  if command -v grype >/dev/null 2>&1; then tool=grype; elif command -v trivy >/dev/null 2>&1; then tool=trivy; else return 0; fi
+  command -v container >/dev/null 2>&1 || return 0
+  mkdir -p "$INBOX/user/images"
+  tmp=$(mktemp -d -t argus-scan) || return 0
+  for ref in $(container list --format json 2>/dev/null | grep -o '"reference" *: *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | sort -u); do
+    safe=$(printf '%s' "$ref" | tr -c 'A-Za-z0-9._-' '_')
+    out="$INBOX/user/images/$safe.json"
+    if container image save --output "$tmp/img.tar" "$ref" >/dev/null 2>&1; then
+      {
+        printf '{"tool":"%s","image":"%s","scanned":%s,"report":' "$tool" "$ref" "$(date +%s)"
+        if [ "$tool" = grype ]; then grype "oci-archive:$tmp/img.tar" -o json -q 2>/dev/null || echo null
+        else trivy image --input "$tmp/img.tar" -f json -q 2>/dev/null || echo null; fi
+        printf '}\n'
+      } | put "$out"
+    else
+      printf '{"tool":"%s","image":"%s","scanned":%s,"error":"container image save failed"}\n' "$tool" "$ref" "$(date +%s)" | put "$out"
+    fi
+    rm -f "$tmp/img.tar"
+  done
+  rmdir "$tmp" 2>/dev/null
+  find "$INBOX/user/images" -name '*.json' -mtime +7 -delete 2>/dev/null
+}
+
 certs_user() {
   echo "== login.keychain"; security find-certificate -a -Z "$HOME/Library/Keychains/login.keychain-db" 2>&1
   echo "== user trust"; security dump-trust-settings 2>&1
@@ -408,6 +459,7 @@ run_user() {
   [ -f "$HOME/.ollama/logs/server.log" ] && tail -n 20000 "$HOME/.ollama/logs/server.log" | put "$A/ollama-server.log"
   quarantine_events
   inventory
+  if ustamp_due image-scan "${ARGUS_IMAGE_SCAN_MIN:-1440}"; then image_scan; ustamp_set image-scan; fi
   if ustamp_due extensions 60; then browser_extensions | put "$INBOX/user/browser-extensions.txt"; certs_user | put "$INBOX/user/certs-user.txt"; ustamp_set extensions; fi
   printf '{"user":"%s","user_last_run":%s}\n' "$(id -un)" "$(date +%s)" | put "$U/meta.json"
   log "user snapshots refreshed"

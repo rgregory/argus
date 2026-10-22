@@ -83,6 +83,14 @@ sudo launchctl kickstart -k system/com.argus.tcc
 
 What this costs: either binary, when started by launchd as root, can read anything on the disk. Only root can create a LaunchDaemon, so another account can't use the grant without already having root. Remove the two entries from Full Disk Access when you uninstall.
 
+### Network expectations
+
+Set `ARGUS_EXPECTED_DNS` in `argus.env` to the resolvers you mean to use (your Pi-hole, or your VPN's DNS), and `ARGUS_EXPECT_VPN=1` if the VPN should always be up. Argus then reports when DNS goes elsewhere or the VPN drops. Without them it just shows what's in use. Run `./argus.sh restart` after changing either.
+
+### Container image scanning
+
+`brew install grype` (or `trivy`). The user job finds it on its next run and scans the images of your running containers once a day; results appear on the Vulnerabilities tab.
+
 ### Little Snitch
 
 If [Little Snitch](https://obdev.at/littlesnitch) is installed, the root collector reads its traffic history every 5 minutes with Little Snitch's own `littlesnitch log-traffic` command. Turn on Little Snitch → Settings → Security → **Allow access via Terminal**, or the command refuses. Nothing else is needed; `sudo grep -i littlesnitch /var/log/argus-collect.log` shows a row count per run once it's working.

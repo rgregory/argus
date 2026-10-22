@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0 (unreleased)
+
+### Added
+
+- **Flagged domains traced to programs.** Each domain flagged by a feed, CrowdSec or OSINT is joined to Little Snitch's hostnames, so the finding names the program on this Mac that connected to it (last 7 days).
+- **Container image scanning.** If `grype` or `trivy` is installed, the user job scans the images your running containers use once a day. Results, with CISA KEV cross-referencing and fixable counts, are on the Vulnerabilities tab.
+- **Time Machine.** Posture shows the last backup's age (warning after 2 days, failing after 7), a missing backup destination, and automatic backups switched off.
+- **Wi-Fi, DNS and VPN.** Every 5 minutes the root job records the Wi-Fi network (`wdutil`), DNS resolvers and VPN state (Mullvad, connected VPN services or a tunnel default route). Findings for open Wi-Fi, new networks and, if you set `ARGUS_EXPECTED_DNS` / `ARGUS_EXPECT_VPN=1`, DNS going elsewhere and the VPN dropping. Current state appears in Posture.
+- **USB and Bluetooth devices.** Hourly `system_profiler` snapshots; new USB devices (storage rated higher) and new Bluetooth devices are reported for 7 days.
+
 ## 1.2.0 (2026-10-21)
 
 ### Added

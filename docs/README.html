@@ -250,7 +250,7 @@ flowchart TB
 <h2 id="the-host-collector">The host collector</h2>
 <h3 id="why-it-exists">Why it exists</h3>
 <p>macOS keeps its unified log in a binary format that only Apple's own <code>log</code> tool can read, so a Linux container can't open it. Some of the other things worth checking, like SIP and FileVault status, login history, or crash reports only root can read, also need a command run on the Mac itself. So Argus installs two small scheduled jobs on the Mac that gather this and drop it into an inbox folder, and the container reads that folder read-only.</p>
-<p>Both jobs run the same bash script, <a href="../collector/argus-collect.sh"><code>collector/argus-collect.sh</code></a>. It's about 420 lines of plain bash, and it's worth reading before you install it.</p>
+<p>Both jobs run the same bash script, <a href="../collector/argus-collect.sh"><code>collector/argus-collect.sh</code></a>. It's about 480 lines of plain bash, and it's worth reading before you install it.</p>
 <h3 id="why-root">Why root</h3>
 <p>Most of the collector would work fine as your own user. This is what root adds, and what it costs:</p>
 <table class="table table-sm">
@@ -312,6 +312,7 @@ flowchart TB
 <ul>
 <li>Runs <code>log show</code> with a fixed filter over the time since its last run, so nothing is missed or read twice. The filter matches <code>sudo</code>, <code>authd</code>, <code>SecurityAgent</code>, <code>sshd</code>, Screen Sharing, screen lock and unlock, Gatekeeper (<code>syspolicyd</code>), XProtect, the application firewall, TCC permission events, background task management and Little Snitch, plus every fault-level message. After sleep or a reboot it catches up at most 60 minutes (<code>ARGUS_MAX_BACKLOG_MIN</code>).</li>
 <li>Lists established TCP connections with <code>lsof</code>, and the running processes with <code>ps</code>, so each connection can be tied to a program.</li>
+<li>Records the Wi-Fi network (<code>wdutil info</code>: SSID, BSSID, security), the DNS resolvers (<code>scutil --dns</code>), the default route and VPN state (<code>scutil --nc list</code>, and <code>mullvad status</code> if Mullvad is installed).</li>
 <li>Moves new Endpoint Security events from the eslogger spool into the inbox, if you installed the optional telemetry (at most 64 MB a run, <code>ARGUS_ES_MAX_MB</code>).</li>
 <li>If Little Snitch is installed and allows Terminal access, exports its traffic history for the same time window with <code>littlesnitch log-traffic</code>.</li>
 </ul>
@@ -324,6 +325,7 @@ flowchart TB
 <li>Checks automatic login, the guest account, Screen Sharing, File Sharing, Remote Apple Events and the XProtect bundle's version and age, and (every 6 hours) lists pending updates with <code>softwareupdate --list --no-scan</code>.</li>
 <li>Hashes the files most often abused for persistence or privilege: <code>/etc/hosts</code>, sudoers and <code>/etc/sudoers.d</code>, <code>/etc/pam.d</code>, sshd and ssh config, the system shell profiles, <code>/etc/periodic</code>, at jobs, authorization plugins, scripting additions and directory-service plug-ins, plus each account's <code>~/.ssh/authorized_keys</code> (with <code>ssh-keygen -l</code> fingerprints), <code>~/.ssh/config</code> and <code>rc</code>, and shell startup files. It records hashes, sizes and modes, never contents. It also reads the login and logout hook settings.</li>
 <li>Lists the System keychain's certificates (<code>security find-certificate -Z</code>, names and hashes) and admin trust settings (<code>security dump-trust-settings -d</code>).</li>
+<li>Lists USB and Bluetooth devices (<code>system_profiler SPUSBHostDataType SPBluetoothDataType</code>) and the Time Machine destination and last backup date (<code>tmutil destinationinfo</code>, the Time Machine preferences).</li>
 </ul>
 <p>Housekeeping:</p>
 <ul>
@@ -355,6 +357,7 @@ flowchart TB
 <li>the tail of Ollama's server log, if you have one at <code>~/.ollama/logs/server.log</code></li>
 <li>the last 30 days of download history from the quarantine database (<code>~/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2</code>, read-only): when, which app, and the file and page URLs where macOS recorded them</li>
 <li>every 6 hours, an app inventory (<code>system_profiler SPApplicationsDataType</code>) and, if Homebrew is installed, <code>brew list --versions</code>, <code>brew info --json=v2 --installed</code> and, once a day, <code>brew vulns</code></li>
+<li>once a day, if <code>grype</code> or <code>trivy</code> is installed, a vulnerability scan of each image your running containers use: <code>container image save</code> to a temporary archive, scan, delete. The scanner downloads its own vulnerability database, so this is the one part of the collector that uses the network</li>
 <li>every hour, browser extensions: manifests and install details from Chromium-family profiles (read with JavaScript for Automation), Firefox's <code>extensions.json</code>, Safari extensions from <code>pluginkit</code>, plus your login keychain's certificate names and your trust settings</li>
 <li>Pi-hole's query log from inside its container, but only if you set <code>ARGUS_PIHOLE_QUERYLOG=1</code> (off by default; the Pi-hole API is the normal route)</li>
 </ul>
@@ -511,6 +514,14 @@ ls -la /Users/Shared/Argus/inbox                                            # wh
 <td>changes to SSH keys, sudoers, PAM, sshd config, authorization plugins, login hooks, the hosts file, scheduled scripts and shell startup files, kept for 7 days</td>
 </tr>
 <tr>
+<td>Network hygiene</td>
+<td>the Wi-Fi network and its security, open or new networks joined, DNS resolvers and VPN state over time; with <code>ARGUS_EXPECTED_DNS</code> / <code>ARGUS_EXPECT_VPN</code> set, DNS leaving your resolver and the VPN dropping; flagged domains traced to the program that used them (with Little Snitch)</td>
+</tr>
+<tr>
+<td>Devices</td>
+<td>new USB devices (storage rated higher) and new Bluetooth devices</td>
+</tr>
+<tr>
 <td>Browser and certificates</td>
 <td>sideloaded, unsigned or newly added browser extensions and ones with all-sites access plus powerful permissions; new System keychain certificates and newly trusted roots</td>
 </tr>
@@ -520,11 +531,11 @@ ls -la /Users/Shared/Argus/inbox                                            # wh
 </tr>
 <tr>
 <td>Vulnerabilities</td>
-<td>macOS and Safari against Apple's security releases, cross-checked with CISA KEV; installed apps that predate KEV entries for their product; pending Apple updates; Homebrew advisories (<code>brew vulns</code>, or OSV.dev as a fallback)</td>
+<td>macOS and Safari against Apple's security releases, cross-checked with CISA KEV; installed apps that predate KEV entries for their product; pending Apple updates; Homebrew advisories (<code>brew vulns</code>, or OSV.dev as a fallback); container images (<code>grype</code> or <code>trivy</code>)</td>
 </tr>
 <tr>
 <td>Posture</td>
-<td>SIP, Gatekeeper, FileVault, firewall and stealth mode, Remote Login, automatic updates, automatic login, guest account, sharing services, and how old XProtect is. The dashboard lists failing checks and tucks passing ones behind a link</td>
+<td>SIP, Gatekeeper, FileVault, firewall and stealth mode, Remote Login, automatic updates, automatic login, guest account, sharing services, how old XProtect is, Time Machine backup age, Wi-Fi security, DNS resolvers and VPN. The dashboard lists failing checks and tucks passing ones behind a link</td>
 </tr>
 <tr>
 <td>System</td>
@@ -840,6 +851,10 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 <tr>
 <td><code>lib/hostsec-extra.js</code></td>
 <td>Program ↔ network, Little Snitch, file integrity, browser extensions, certificates</td>
+</tr>
+<tr>
+<td><code>lib/hostsec-extra2.js</code></td>
+<td>Flagged domains ↔ programs, Wi-Fi/DNS/VPN, USB and Bluetooth devices, container image scans</td>
 </tr>
 <tr>
 <td><code>lib/vulns.js</code></td>
