@@ -31,6 +31,7 @@ class FindingState {
   constructor(store) {
     this.store = store;
     store.db.exec(SCHEMA);
+    if (!store.all('PRAGMA table_info(finding_snap)').some(c => c.name === 'acked')) store.db.exec('ALTER TABLE finding_snap ADD COLUMN acked INTEGER NOT NULL DEFAULT 0');
     this.lastSnap = (store.get('SELECT MAX(ts) AS t FROM finding_snap') || {}).t || 0;
   }
 
@@ -55,14 +56,14 @@ class FindingState {
   unack(id) { this.store.run('DELETE FROM finding_acks WHERE id = ?', id); }
   acks() { return this.store.all('SELECT id, title, note, at FROM finding_acks ORDER BY at DESC'); }
 
-  // Hourly snapshot of the visible findings, kept 8 days.
+  // Hourly snapshot of the findings, kept 31 days for the trend charts.
   snapshot(findings, force = false) {
     const now = Date.now();
     if (!force && now - this.lastSnap < H - 60e3) return;
     this.store.tx(() => {
-      for (const f of findings) this.store.run('INSERT OR REPLACE INTO finding_snap(ts, id, sev, area, title, fp) VALUES (?, ?, ?, ?, ?, ?)', now, f.id, f.sev, f.area, f.title, f.fp || fingerprint(f));
+      for (const f of findings) this.store.run('INSERT OR REPLACE INTO finding_snap(ts, id, sev, area, title, fp, acked) VALUES (?, ?, ?, ?, ?, ?, ?)', now, f.id, f.sev, f.area, f.title, f.fp || fingerprint(f), f.acked ? 1 : 0);
       if (!findings.length) this.store.run("INSERT OR REPLACE INTO finding_snap(ts, id, sev, area, title, fp) VALUES (?, '', '', '', '', '')", now);
-      this.store.run('DELETE FROM finding_snap WHERE ts < ?', now - 8 * D);
+      this.store.run('DELETE FROM finding_snap WHERE ts < ?', now - 31 * D);
     });
     this.lastSnap = now;
   }

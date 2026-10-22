@@ -95,6 +95,20 @@ Set `ARGUS_EXPECTED_DNS` in `argus.env` to the resolvers you mean to use (your P
 
 If [Little Snitch](https://obdev.at/littlesnitch) is installed, the root collector reads its traffic history every 5 minutes with Little Snitch's own `littlesnitch log-traffic` command. Turn on Little Snitch → Settings → Security → **Allow access via Terminal**, or the command refuses. Nothing else is needed; `sudo grep -i littlesnitch /var/log/argus-collect.log` shows a row count per run once it's working.
 
+### Alerts
+
+macOS notifications work as soon as `./argus.sh install-collector` has run: it installs a small LaunchAgent (`com.argus.notify`) that shows each new alert the container writes to `data/alerts/`. With `terminal-notifier` installed (`brew install terminal-notifier`), clicking a notification opens the dashboard.
+
+To get alerts on your phone, set one of these in `argus.env` and run `./argus.sh restart`:
+
+| Service | Settings |
+|---|---|
+| [ntfy](https://ntfy.sh) | `ARGUS_NTFY_URL=https://ntfy.sh/<long-random-topic>` (and `ARGUS_NTFY_TOKEN` for a protected topic) |
+| [Pushover](https://pushover.net) | `PUSHOVER_TOKEN` and `PUSHOVER_USER` |
+| Slack or similar | `ARGUS_ALERT_WEBHOOK=<incoming webhook URL>` |
+
+Then use Sources & feeds › Alerts › Send a test. `ARGUS_ALERT_SEV=medium` also alerts on medium findings; `ARGUS_ALERT_HEALTH=off` stops alerts about stalled inputs.
+
 ## 5. Start Argus
 
 ```bash

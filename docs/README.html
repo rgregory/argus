@@ -547,6 +547,16 @@ ls -la /Users/Shared/Argus/inbox                                            # wh
 <h3 id="working-through-findings">Working through findings</h3>
 <p>Open a finding to see its evidence. If it's expected, acknowledge it, with a note if you like: it leaves the counts and lists until something new shows up in its evidence, then returns marked "changed since acknowledged". Repeats of the same thing (a later timestamp, a higher repeat count) don't bring it back. The Overview's "Changed in the last 24 hours" card lists new, changed and resolved findings, and links to the day's digest.</p>
 <p>With endpoint telemetry installed, every process launch is also checked against <a href="https://github.com/SigmaHQ/sigma">SigmaHQ</a>'s macOS process-creation rules, refreshed weekly. Rules that need fields Endpoint Security doesn't give Argus are skipped and listed under Sources &amp; feeds.</p>
+<h3 id="trends-and-the-weekly-edition">Trends and the weekly edition</h3>
+<p>"Is it getting better?" on the Overview shows open high and medium findings at the end of each day for the last 30 days, over the number of security events per day, with a small chart for each area. The 24-hour clock at the top gets a dashed outline for a normal day, the average of the previous week, once there are three days of history.</p>
+<p>Every Monday morning (<code>ARGUS_WEEKLY_DAY</code>, <code>ARGUS_DIGEST_HOUR</code>) Argus writes <strong>The Argus Weekly</strong> to <code>data/reports/</code>: a one-page front page with what's new, fixed and still open, the month's trend, set-up problems, first-time programs and Argus's own health. "This week's edition" on the Overview opens the current one at any time, and its button prints it or saves it as a PDF.</p>
+<h3 id="sigma-rules">Sigma rules</h3>
+<p>The Endpoint tab lists every rule, how often it matched, when, and which programs. Mute a noisy rule there. To add your own, save macOS <code>process_creation</code> rules as <code>.yml</code> files in <code>$ARGUS_HOME/data/sigma/</code>; they're picked up within a minute and replace a SigmaHQ rule with the same id. The fields Endpoint Security provides are <code>Image</code>, <code>CommandLine</code> and <code>ParentImage</code>.</p>
+<h3 id="program-dossiers">Program dossiers</h3>
+<p>Click any program, in the network chart, in a finding's evidence or in the Endpoint tables, or type its name into "Find a program" at the top. The dossier pulls together everything Argus holds about it: who signed it, what launched it and what it launched, every destination and how much data went each way, privacy permissions, login items, downloads, Endpoint Security and Sigma events, and the findings that mention it. For an app it covers all the helpers inside the bundle.</p>
+<h3 id="pipeline-health-and-alerts">Pipeline health and alerts</h3>
+<p>A quiet dashboard should mean a quiet Mac, not a stopped collector. Argus checks every input on each report (collectors, unified log, Endpoint Security, the TCC reader, snapshots, Little Snitch, feeds, Sigma, CrowdSec) and shows anything stalled in a strip at the top of every tab, with the usual fix.</p>
+<p>New high findings and stopped inputs also raise an alert: a macOS notification by default, plus ntfy, Pushover or a webhook if you configure them in <code>argus.env</code>. A finding alerts once, and again only if new evidence shows up. Acknowledged findings stay quiet. Sources &amp; feeds › Alerts has a "Send a test" button.</p>
 <h2 id="log-throughput">Log throughput</h2>
 <p>A Mac playing YouTube in Safari writes hundreds of unified-log entries per second. Argus only ships the security slice, which is usually well under one event per second.</p>
 <table class="table table-sm">
@@ -782,6 +792,10 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 <td>Exports the unified-log slice and host state (system, user or once)</td>
 </tr>
 <tr>
+<td><code>argus-notify.sh</code></td>
+<td>Shows alerts as macOS notifications (run by the <code>com.argus.notify</code> LaunchAgent)</td>
+</tr>
+<tr>
 <td><code>argus-logstream.sh</code></td>
 <td>Live unified-log to syslog relay, started by <code>argus.sh stream on</code></td>
 </tr>
@@ -866,6 +880,26 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 <tr>
 <td><code>lib/sigma.js</code></td>
 <td>Fetches and runs SigmaHQ macOS process-creation rules</td>
+</tr>
+<tr>
+<td><code>lib/dossier.js</code></td>
+<td>Program dossiers and program search</td>
+</tr>
+<tr>
+<td><code>lib/health.js</code></td>
+<td>Pipeline health checks for every input</td>
+</tr>
+<tr>
+<td><code>lib/alerts.js</code></td>
+<td>Alerts: macOS notifications, ntfy, Pushover, webhook</td>
+</tr>
+<tr>
+<td><code>lib/trends.js</code></td>
+<td>Hourly event history and daily open-finding counts</td>
+</tr>
+<tr>
+<td><code>lib/weekly.js</code></td>
+<td>The Argus Weekly, a printable weekly front page</td>
 </tr>
 <tr>
 <td><code>lib/vulns.js</code></td>

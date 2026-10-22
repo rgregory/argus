@@ -8,6 +8,10 @@
 // Rules that need any other field (OriginalFileName, ParentCommandLine, ...)
 // are skipped, and listed as unsupported in the status.
 //
+// Your own rules: put .yml files in $ARGUS_HOME/data/sigma/ (the container's
+// /data/sigma). They load within a minute and replace a SigmaHQ rule with the same id.
+// Rules can be muted from the dashboard; the list lives in the state volume.
+//
 // Sigma rules are licensed under the Detection Rule License (DRL) 1.1; each
 // match carries the rule's title, id, author and a link to the rule.
 const fs = require('node:fs');
@@ -105,26 +109,60 @@ function compile(text, file) {
 class Sigma {
   constructor() {
     this.dir = path.join(cfg.state, 'sigma');
+    this.localDir = path.join(cfg.data, 'sigma');
     fs.mkdirSync(this.dir, { recursive: true });
-    this.rules = []; this.skipped = []; this.meta = {};
+    try { fs.mkdirSync(this.localDir, { recursive: true }); } catch (e) { /* read-only data dir */ }
+    this.rules = []; this.skipped = []; this.meta = {}; this.localSig = '';
+    this.muted = new Set();
+    try { this.muted = new Set(JSON.parse(fs.readFileSync(path.join(this.dir, 'muted.json'), 'utf8'))); } catch (e) { /* none */ }
     this.disabled = String(process.env.ARGUS_SIGMA || '1') === '0';
     try { this.meta = JSON.parse(fs.readFileSync(path.join(this.dir, 'meta.json'), 'utf8')); } catch (e) { /* none */ }
     this.load();
   }
+  listLocal() { try { return fs.readdirSync(this.localDir).filter(n => /\.ya?ml$/.test(n)); } catch (e) { return []; } }
+  localSignature() { return this.listLocal().map(n => { try { return n + ':' + fs.statSync(path.join(this.localDir, n)).mtimeMs; } catch (e) { return n; } }).join('|'); }
+  // Called every ingest cycle: reload when a local rule is added, changed or removed.
+  maybeReload() { const s = this.localSignature(); if (s !== this.localSig) { this.load(); } }
   load() {
-    const rules = [], skipped = [];
+    const all = [], skipped = [];
+    const take = (dir, f, local) => {
+      try {
+        const r = compile(fs.readFileSync(path.join(dir, f), 'utf8'), f);
+        r.local = local;
+        if (local) r.link = '';
+        all.push(r);
+      } catch (e) { skipped.push({ file: f, why: e.message, local }); }
+    };
     let files = [];
     try { files = fs.readdirSync(this.dir).filter(n => n.endsWith('.yml')); } catch (e) { /* none */ }
+    files.forEach(f => take(this.dir, f, false));
+    const local = this.listLocal();
+    local.forEach(f => take(this.localDir, f, true));
+    this.localSig = this.localSignature();
+    // a local rule replaces a SigmaHQ rule with the same id
+    const byId = new Map();
+    for (const r of all) if (!byId.has(r.id) || r.local) byId.set(r.id, r);
     const off = new Set(String(process.env.ARGUS_SIGMA_DISABLE || '').split(/[,\s]+/).filter(Boolean));
-    for (const f of files) {
-      try {
-        const r = compile(fs.readFileSync(path.join(this.dir, f), 'utf8'), f);
-        if (off.has(r.id) || off.has(f)) { skipped.push({ file: f, why: 'disabled in ARGUS_SIGMA_DISABLE' }); continue; }
-        rules.push(r);
-      } catch (e) { skipped.push({ file: f, why: e.message }); }
+    const rules = [];
+    for (const r of byId.values()) {
+      if (off.has(r.id) || off.has(r.file)) { skipped.push({ file: r.file, id: r.id, title: r.title, why: 'disabled in ARGUS_SIGMA_DISABLE', local: r.local }); continue; }
+      rules.push(r);
     }
-    this.rules = rules; this.skipped = skipped;
-    if (files.length) log.info(`${rules.length} Sigma rules loaded, ${skipped.length} skipped`);
+    this.all = rules;
+    this.rules = rules.filter(r => !this.muted.has(r.id));
+    this.skipped = skipped;
+    if (files.length || local.length) log.info(`${this.rules.length} Sigma rules active (${local.length} local), ${this.muted.size} muted, ${skipped.length} skipped`);
+  }
+  isMuted(id) { return this.muted.has(id); }
+  setMuted(id, on) {
+    if (on) this.muted.add(id); else this.muted.delete(id);
+    writeFileAtomic(path.join(this.dir, 'muted.json'), JSON.stringify([...this.muted]));
+    this.rules = (this.all || []).filter(r => !this.muted.has(r.id));
+  }
+  // Full rule list for the dashboard panel.
+  list() {
+    return (this.all || []).map(r => ({ id: r.id, title: r.title, level: r.level, author: r.author, file: r.file, local: !!r.local, link: r.link, tags: r.tags,
+      falsepositives: r.falsepositives, muted: this.muted.has(r.id) }));
   }
   async refresh(force = false) {
     if (this.disabled) return;
@@ -156,7 +194,8 @@ class Sigma {
     return hits;
   }
   status() {
-    return { enabled: !this.disabled, rules: this.rules.length, skipped: this.skipped.length, skippedList: this.skipped.slice(0, 100), updated: this.meta.updated || null, error: this.meta.error || '' };
+    return { enabled: !this.disabled, rules: this.rules.length, local: (this.all || []).filter(r => r.local).length, muted: this.muted.size, skipped: this.skipped.length, skippedList: this.skipped.slice(0, 200),
+      updated: this.meta.updated || null, error: this.meta.error || '', localDir: '$ARGUS_HOME/data/sigma' };
   }
 }
 

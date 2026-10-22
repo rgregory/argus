@@ -146,6 +146,81 @@
   .ed-stat-l { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .07em; color: var(--muted); font-size: .88rem; margin-top: .35rem; }
   .ed-stat-u { opacity: .75; }
   @media (max-width: 760px) { .ed-stats { grid-template-columns: repeat(3, 1fr); } .ed-stat:nth-of-type(4) { border-left: 0; } }
+  .ed-normal-key { display: inline-block; width: 1.1rem !important; height: 0 !important; border-radius: 0 !important; border-top: 1.5px dashed var(--ink); margin-right: .4rem; transform: translateY(-.2rem) !important; background: none !important; }
+  .ed-multiples { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.2rem 1.6rem; margin-top: 1.4rem; border-top: 1px solid var(--rule); padding-top: 1rem; }
+  .ed-mult { color: inherit; text-decoration: none; display: block; }
+  .ed-mult:hover { text-decoration: none; color: inherit; background: var(--field); }
+  .ed-mult-h { display: flex; justify-content: space-between; align-items: baseline; font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; font-weight: 600; letter-spacing: .04em; }
+  .ed-mult-h b { font-size: 1.5rem; font-weight: 500; color: var(--ink); font-variant-numeric: lining-nums; }
+  .ed-mult-d { font-family: 'Source Serif 4', Georgia, serif; font-size: .82rem; color: var(--muted); }
+  /* ---- stop-press health strip */
+  .ed-stop { display: grid; grid-template-columns: auto 1fr auto; gap: .4rem 1.2rem; align-items: baseline; border-top: 3px solid var(--sev-high); border-bottom: 1px solid var(--rule); padding: .65rem .2rem; margin: 0 0 1.4rem; background: color-mix(in srgb, var(--sev-high) 6%, transparent); }
+  .ed-stop.is-warn { border-top-color: var(--sev-medium); background: color-mix(in srgb, var(--sev-medium) 7%, transparent); }
+  .ed-stop.is-grace { border-top-color: var(--muted); background: var(--field); }
+  .ed-stop-k { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; font-weight: 700; letter-spacing: .1em; font-size: 1.05rem; color: var(--sev-high); padding-left: .4rem; }
+  .ed-stop.is-warn .ed-stop-k { color: var(--sev-medium); } .ed-stop.is-grace .ed-stop-k { color: var(--muted); }
+  .ed-stop-item { font-family: 'Source Serif 4', Georgia, serif; font-size: .95rem; line-height: 1.45; }
+  .ed-stop-item code { display: inline-block; margin-left: .6rem; font-size: .78rem; background: transparent; color: var(--ink-2); padding: 0; }
+  .ed-stop-item .when { color: var(--muted); }
+  .ed-stop-x { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .05em; color: var(--ink); border-bottom: 1px solid var(--ink); text-decoration: none; padding-right: .4rem; }
+  @media (max-width: 700px) { .ed-stop { grid-template-columns: 1fr; } }
+
+  /* ---- program search */
+  .ed-find { position: relative; display: flex; align-items: center; gap: .35rem; border-bottom: 1px solid var(--rule); margin-right: .6rem; color: var(--muted); }
+  .ed-find input { border: 0; background: transparent; color: var(--ink); font-family: 'Source Serif 4', Georgia, serif; font-size: .95rem; width: 13rem; padding: .25rem 0; outline: none; }
+  .ed-find input::placeholder { color: var(--muted); font-style: italic; }
+  .ed-find-menu { position: absolute; top: 100%; right: 0; width: min(34rem, 90vw); max-height: 60vh; overflow: auto; background: var(--paper-2); border: 1px solid var(--rule); border-top: 2px solid var(--ink); z-index: 1100; box-shadow: 0 12px 30px rgba(0,0,0,.18); }
+  .ed-find-menu a { display: block; padding: .45rem .7rem; border-bottom: 1px solid var(--rule); color: var(--ink); text-decoration: none; }
+  .ed-find-menu a:hover { background: var(--field); }
+  .ed-find-menu b { font-family: 'Fraunces', Georgia, serif; font-weight: 600; display: block; }
+  .ed-find-menu .mono { color: var(--muted); font-size: .75rem; }
+  .ed-plink { color: inherit; text-decoration: underline dotted; text-decoration-color: var(--muted); text-underline-offset: 3px; }
+  .ed-plink:hover { text-decoration-color: currentColor; color: inherit; }
+  .ed-chart [data-dossier] { cursor: pointer; }
+
+  /* ---- dossier */
+  .dos-wrap { position: fixed; inset: 0; z-index: 1040; overflow-y: auto; padding: 2.5rem 1rem 4rem; }
+  .dos-backdrop { position: fixed; inset: 0; background: color-mix(in srgb, var(--ink) 38%, transparent); backdrop-filter: blur(2px); }
+  .dos { position: relative; max-width: 1100px; margin: 0 auto; background: var(--paper); border: 1px solid var(--rule); border-top: 4px double var(--ink); padding: 1.6rem 2.2rem 1rem; box-shadow: 0 30px 80px rgba(0,0,0,.3); }
+  .dos-close { position: absolute; top: .8rem; right: .9rem; border: 0; background: transparent; color: var(--muted); font-size: 1.3rem; }
+  .dos-close:hover { color: var(--ink); }
+  .dos-mast { text-align: center; padding: .4rem 0 .2rem; }
+  .dos-title { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-variant: small-caps; letter-spacing: .02em; font-size: clamp(2rem, 4.4vw, 3.2rem); line-height: 1.05; margin: .3rem 0 .4rem; font-variation-settings: "opsz" 144; }
+  .dos-path { font-family: var(--tblr-font-monospace); font-size: .8rem; color: var(--muted); word-break: break-all; }
+  .dos-notes { display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem .5rem; margin-top: .9rem; }
+  .dos-note { font-family: 'Source Serif 4', Georgia, serif; font-size: .9rem; padding: .15rem .6rem; border: 1px solid var(--c); color: var(--c); border-radius: 999px; }
+  .dos-note.is-ok { --c: var(--ok); }
+  .dos-stats { margin-top: 1.4rem; }
+  .dos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6rem 2.6rem; margin-top: 1.6rem; }
+  .dos-wide { grid-column: 1 / -1; }
+  @media (max-width: 800px) { .dos-grid { grid-template-columns: 1fr; } .dos { padding: 1.2rem 1rem; } }
+  .dos-h { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; font-weight: 600; letter-spacing: .03em; font-size: 1.3rem; border-bottom: 2px solid var(--ink); padding-bottom: .25rem; margin: 0 0 .6rem; }
+  .dos-sub { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .05em; color: var(--muted); margin: 1rem 0 .3rem; }
+  .dos-cap { font-family: 'Source Serif 4', Georgia, serif; color: var(--ink-2); font-size: .92rem; margin: -.2rem 0 .6rem; }
+  .dos-dl { display: grid; grid-template-columns: 8.5rem 1fr; gap: .3rem .8rem; margin: 0; font-family: 'Source Serif 4', Georgia, serif; }
+  .dos-dl dt { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .04em; color: var(--muted); font-weight: 500; }
+  .dos-dl dd { margin: 0; word-break: break-all; }
+  .dos-list { list-style: none; padding: 0; margin: 0; }
+  .dos-list li { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; padding: .3rem 0; border-bottom: 1px dotted var(--rule); font-family: 'Source Serif 4', Georgia, serif; font-size: .92rem; }
+  .dos-list a { color: var(--ink); }
+  .dos-meta { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+  .dos-strong { font-weight: 700; color: var(--sev-medium); }
+  .dos-table { width: 100%; border-collapse: collapse; font-family: 'Source Serif 4', Georgia, serif; font-size: .9rem; }
+  .dos-table th { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .04em; color: var(--muted); font-weight: 500; text-align: left; border-bottom: 1px solid var(--ink); padding: .3rem .4rem; }
+  .dos-table td { border-bottom: 1px solid var(--rule); padding: .35rem .4rem; vertical-align: middle; }
+  .dos-table a { color: var(--ink); }
+  .dos-table tr.is-flag td { background: color-mix(in srgb, var(--sev-high) 9%, transparent); }
+  .dos-flag { display: inline-block; margin-left: .4rem; color: var(--sev-high); font-size: .8rem; font-weight: 700; }
+  .dos-barcol { width: 34%; }
+  .dos-bar { position: relative; height: 1.15rem; }
+  .dos-bar i { position: absolute; left: 0; top: .2rem; bottom: .2rem; background: color-mix(in srgb, var(--ink) 22%, transparent); border-right: 2px solid var(--ink); }
+  .dos-bar span { position: relative; padding-left: .4rem; font-size: .82rem; font-variant-numeric: tabular-nums; }
+  .dos-events { list-style: none; padding: 0; margin: 0; max-height: 26rem; overflow: auto; }
+  .dos-events li { display: grid; grid-template-columns: 9.5rem .8rem 1fr; gap: .4rem; align-items: baseline; padding: .3rem 0; border-bottom: 1px dotted var(--rule); font-size: .85rem; }
+  .dos-events .mono { word-break: break-word; }
+  .dos-when { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+  body.dos-open { overflow: hidden; }
+  .dos .ed-list { border-top: 0; }
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
@@ -163,6 +238,14 @@
         <span>· updated <span x-text="r ? ago(r.generated) : ''"></span></span>
       </div>
       <div class="navbar-nav flex-row order-md-last ms-auto gap-1 align-items-center">
+        <div class="ed-find d-none d-md-flex" x-show="r" @click.outside="findRes = []; findQ = ''">
+          <i class="ti ti-search"></i>
+          <input type="search" placeholder="Find a program" aria-label="Find a program" :value="findQ" @input.debounce.250ms="findPrograms($event.target.value)" @keydown.escape="findRes = []; findQ = ''; $event.target.value = ''">
+          <div class="ed-find-menu" x-show="findQ.trim().length > 1">
+            <template x-for="p in findRes" :key="p.path"><a href="#" @click.prevent="openDossier(p.path); findRes = []; findQ = ''"><b x-text="p.name"></b><span class="mono" x-text="p.path"></span></a></template>
+            <div class="ed-none px-3 py-2" x-show="!findRes.length && !findBusy">No program by that name in launches, network or running programs.</div>
+          </div>
+        </div>
         <button class="btn btn-ghost-secondary btn-icon" title="Refresh now" @click="load(true)"><i class="ti ti-refresh" :class="loading && 'ti-spin'"></i></button>
         <button class="btn btn-ghost-secondary btn-icon" title="Toggle theme" @click="toggleTheme()"><i class="ti" :class="theme === 'dark' ? 'ti-sun' : 'ti-moon'"></i></button>
       </div>
@@ -190,6 +273,16 @@
     <div class="page-body">
       <div class="container-xl">
         <div class="alert alert-danger" x-show="error" x-text="error"></div>
+        <div class="ed-stop" x-show="r && healthBad().length" :class="r && r.health ? 'is-' + r.health.status + (r.health.grace ? ' is-grace' : '') : ''">
+          <div class="ed-stop-k" x-text="r && r.health && r.health.grace ? 'Catching up' : (r && r.health && r.health.status === 'fail' ? 'Stop press' : 'Notice')"></div>
+          <div>
+            <template x-for="c in healthBad()" :key="c.id">
+              <div class="ed-stop-item"><b x-text="c.title"></b><span class="when" x-show="c.since" x-text="' · noticed ' + fmt(c.since)"></span><code x-show="c.fix" x-text="c.fix"></code></div>
+            </template>
+            <div class="ed-stop-item when" x-show="r && r.health && r.health.grace">Argus just started or the Mac just woke; inputs usually catch up within ten minutes.</div>
+          </div>
+          <a href="#" class="ed-stop-x" @click.prevent="setTab('sources')">Pipeline health</a>
+        </div>
         <div class="text-center py-6 text-secondary" x-show="!r && !error"><div class="spinner-border mb-3"></div><div>Loading report…</div></div>
 
         <template x-if="r">
@@ -204,7 +297,7 @@
               <div class="ed-kicker" x-text="'The Argus brief · ' + new Date(r.generated).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })"></div>
               <h1 class="ed-title">What has <span x-text="r.host.name || 'this Mac'"></span> been up&nbsp;to?</h1>
               <p class="ed-lede" x-html="lede()"></p>
-              <div class="ed-legend"><template x-for="c in tlCats()" :key="c[0]"><span><i :style="'background:' + areaColor(c[2])"></i><span x-text="c[1]"></span></span></template></div>
+              <div class="ed-legend"><template x-for="c in tlCats()" :key="c[0]"><span><i :style="'background:' + areaColor(c[2])"></i><span x-text="c[1]"></span></span></template><span x-show="clockNormal()"><i class="ed-normal-key"></i>7-day normal</span></div>
             </div>
           </header>
           <div class="ed-stats">
@@ -272,7 +365,23 @@
                   </div>
                 </template>
               </div>
-              <a class="ed-link" href="/api/digest" target="_blank" rel="noopener">Read today's digest →</a>
+              <div class="d-flex flex-wrap gap-3"><a class="ed-link" href="/api/digest" target="_blank" rel="noopener">Read today's digest →</a><a class="ed-link" href="/api/weekly" target="_blank" rel="noopener">This week's edition →</a></div>
+            </div>
+          </section>
+
+          <!-- trends -->
+          <section class="ed-sec">
+            <h2 class="ed-h">Is it getting better?</h2>
+            <p class="ed-sub" x-html="trendSub()"></p>
+            <div class="ed-chart" x-html="trendSvg()"></div>
+            <div class="ed-multiples" x-show="trendAreas().length">
+              <template x-for="m in trendAreas()" :key="m.area">
+                <a href="#" class="ed-mult" @click.prevent="fArea = m.area; fSev = ['high','medium','low','info']; setTab('findings')">
+                  <div class="ed-mult-h"><span :style="'color:' + areaColor(m.area)" x-text="m.area"></span><b x-text="m.now"></b></div>
+                  <div x-html="sparkSvg(m)"></div>
+                  <div class="ed-mult-d" x-html="m.deltaHtml"></div>
+                </a>
+              </template>
             </div>
           </section>
 
@@ -280,7 +389,7 @@
           <section class="ed-sec" x-show="talkers().length">
             <h2 class="ed-h">Who is the Mac talking to?</h2>
             <p class="ed-sub" x-html="talkersSub()"></p>
-            <div class="ed-chart" x-html="talkersSvg()"></div>
+            <div class="ed-chart" x-html="talkersSvg()" @click="dosClick($event)"></div>
           </section>
 
           <!-- posture tiles -->
@@ -335,7 +444,7 @@
                   </div>
                   <div x-show="openFinding === f.id">
                     <div class="text-secondary small mt-2" x-show="f.detail" x-text="f.detail"></div>
-                    <pre class="evidence" x-text="f.evidence.join('\n')"></pre>
+                    <pre class="evidence" x-html="evidenceHtml(f.evidence)" @click="dosClick($event)"></pre>
                     <div class="d-flex gap-2 align-items-center mt-2" @click.stop>
                       <template x-if="!f.acked">
                         <div class="d-flex gap-2 align-items-center flex-fill">
@@ -703,7 +812,7 @@
               <div class="table-responsive table-wrap"><table class="table table-sm card-table">
                 <thead><tr><th>First run</th><th>Program</th><th>Signer</th><th>Parent</th></tr></thead>
                 <tbody>
-                  <template x-for="(b, i) in (r.hostsec.es.newBinaries || [])" :key="i"><tr><td class="small nowrap" x-text="fmt(b.first_seen)"></td><td class="small mono text-break" x-text="b.path"></td>
+                  <template x-for="(b, i) in (r.hostsec.es.newBinaries || [])" :key="i"><tr><td class="small nowrap" x-text="fmt(b.first_seen)"></td><td class="small mono text-break"><a href="#" class="ed-plink" @click.prevent="openDossier(b.path)" x-text="b.path"></a></td>
                     <td class="small"><span class="badge" :class="b.team ? 'bg-green-lt' : 'bg-orange-lt'" x-text="b.team || (b.adhoc ? 'ad-hoc' : 'no Team ID')"></span></td><td class="small mono text-break" x-text="b.last_parent"></td></tr></template>
                   <tr x-show="!(r.hostsec.es.newBinaries || []).length"><td colspan="4" class="text-secondary" x-text="r.hostsec.es.baselineDone ? 'None in the window.' : 'Learning what normally runs here (first 24 h).'"></td></tr>
                 </tbody></table></div></div></div>
@@ -711,7 +820,7 @@
               <div class="card-header"><h3 class="card-title">Most-run third-party programs</h3></div>
               <div class="table-responsive table-wrap"><table class="table table-sm card-table">
                 <thead><tr><th>Program</th><th>Signer</th><th class="text-end">Runs</th><th>Last</th></tr></thead>
-                <tbody><template x-for="(b, i) in (r.hostsec.es.topThirdParty || []).slice(0, 150)" :key="i"><tr><td class="small mono text-break" x-text="b.path"></td>
+                <tbody><template x-for="(b, i) in (r.hostsec.es.topThirdParty || []).slice(0, 150)" :key="i"><tr><td class="small mono text-break"><a href="#" class="ed-plink" @click.prevent="openDossier(b.path)" x-text="b.path"></a></td>
                   <td class="small" x-text="b.team || (b.adhoc ? 'ad-hoc' : 'no Team ID')"></td><td class="text-end" x-text="num(b.count)"></td><td class="small nowrap" x-text="ago(b.last_seen)"></td></tr></template></tbody></table></div></div></div>
 
             <div class="col-lg-6"><div class="card">
@@ -740,7 +849,7 @@
               <div class="table-responsive table-wrap"><table class="table table-sm card-table">
                 <thead><tr><th>Program</th><th>Destinations</th><th class="text-end">Remotes</th><th class="text-end">Conns</th><th class="text-end">Denied</th><th class="text-end">Sent</th><th class="text-end">Received</th><th>Last</th></tr></thead>
                 <tbody><template x-for="(p, i) in ((r.hostsec.littlesnitch && r.hostsec.littlesnitch.programs) || []).slice(0, 200)" :key="i"><tr>
-                  <td class="small mono text-break" x-text="p.path"></td>
+                  <td class="small mono text-break"><a href="#" class="ed-plink" @click.prevent="openDossier(p.path)" x-text="p.path"></a></td>
                   <td class="small"><template x-for="(h, j) in p.hosts" :key="j"><a href="#" class="me-2" @click.prevent="openIndicator('domain', h)" x-text="h"></a></template></td>
                   <td class="text-end" x-text="num(p.remotes)"></td><td class="text-end" x-text="num(p.connects)"></td><td class="text-end" :class="p.denies && 'text-orange'" x-text="num(p.denies)"></td>
                   <td class="text-end nowrap" x-text="bytes(p.bytes_out)"></td><td class="text-end nowrap" x-text="bytes(p.bytes_in)"></td><td class="small nowrap" x-text="ago(p.last)"></td></tr></template></tbody></table></div></div></div>
@@ -782,7 +891,7 @@
                 <thead><tr><th>Program</th><th>Signer</th><th class="text-end">Remotes</th><th>Ports</th><th>Sample</th><th>Last</th></tr></thead>
                 <tbody>
                   <template x-for="(p, i) in ((r.hostsec.net && r.hostsec.net.programs) || []).slice(0, 200)" :key="i"><tr :class="p.flagged && 'table-danger'">
-                    <td class="small mono text-break" x-text="p.path"></td>
+                    <td class="small mono text-break"><a href="#" class="ed-plink" @click.prevent="openDossier(p.path)" x-text="p.path"></a></td>
                     <td class="small"><span class="badge" :class="p.platform ? 'bg-secondary-lt' : p.team ? 'bg-green-lt' : p.known ? 'bg-orange-lt' : 'bg-secondary-lt'" x-text="p.platform ? 'Apple' : p.team || (p.known ? (p.adhoc ? 'ad-hoc' : 'no Team ID') : '?')"></span></td>
                     <td class="text-end" x-text="p.remotes"></td><td class="small" x-text="p.ports.join(', ')"></td>
                     <td class="small mono"><template x-for="(ip, j) in p.sample" :key="j"><a href="#" class="me-2" @click.prevent="openIndicator('ip', ip)" x-text="ip"></a></template></td>
@@ -838,6 +947,46 @@
         </div>
 
         <!-- ============================================================ VULNERABILITIES -->
+        <div x-show="tab === 'endpoint'" class="mt-3" x-init="tab === 'endpoint' && loadSigma(); $watch('tab', v => v === 'endpoint' && loadSigma())">
+          <div class="card">
+            <div class="card-header"><h3 class="card-title">Sigma rules</h3>
+              <div class="card-actions d-flex gap-2 align-items-center">
+                <input class="form-control form-control-sm" style="width:13rem" placeholder="Filter rules" x-model.debounce.200ms="sgQ">
+                <label class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" x-model="sgAll"><span class="form-check-label small">show rules with no matches</span></label>
+              </div></div>
+            <div class="card-body small text-secondary pb-2" x-html="sigmaSummary()"></div>
+            <div class="table-responsive table-wrap"><table class="table table-sm card-table">
+              <thead><tr><th>Rule</th><th>Level</th><th class="text-end">Matches</th><th>Last</th><th>Programs</th><th></th></tr></thead>
+              <tbody>
+                <template x-for="g in sigmaRows()" :key="g.id">
+                  <tr :class="g.muted && 'text-secondary'">
+                    <td><a x-show="g.link" :href="g.link" target="_blank" rel="noopener" x-text="g.title"></a><span x-show="!g.link" x-text="g.title"></span>
+                      <span class="badge bg-azure-lt ms-1" x-show="g.local">local</span><span class="badge bg-secondary-lt ms-1" x-show="g.muted">muted</span>
+                      <div class="small text-secondary" x-show="g.falsepositives && g.falsepositives.length" x-text="'False positives: ' + (g.falsepositives || []).join('; ')"></div></td>
+                    <td><span class="badge" :class="sevBadge(g.level === 'critical' ? 'high' : g.level === 'informational' ? 'info' : g.level)" x-text="g.level"></span></td>
+                    <td class="text-end" x-text="g.hits ? num(g.hits) : '—'"></td>
+                    <td class="small nowrap" x-text="g.last ? ago(g.last) : ''"></td>
+                    <td class="small mono text-break"><template x-for="p in g.paths" :key="p"><a href="#" class="ed-plink d-block" @click.prevent="openDossier(p)" x-text="p"></a></template></td>
+                    <td class="text-end"><button class="btn btn-sm btn-ghost-secondary" @click="muteRule(g, !g.muted)" x-text="g.muted ? 'Unmute' : 'Mute'"></button></td>
+                  </tr>
+                </template>
+                <tr x-show="sg && !sigmaRows().length"><td colspan="6" class="text-secondary" x-text="sgAll || sgQ ? 'No rule matches the filter.' : 'No rule has matched since Endpoint Security events began. Switch on &quot;show rules with no matches&quot; to see them all.'"></td></tr>
+              </tbody></table></div>
+            <div class="card-body small" x-show="sg && sg.recent.length">
+              <div class="subheader mb-2">Latest matches</div>
+              <template x-for="(e, i) in (sg ? sg.recent.slice(0, 15) : [])" :key="i">
+                <div class="d-flex gap-2 py-1 border-bottom"><span class="text-secondary nowrap" x-text="fmt(e.ts)"></span><span class="badge" :class="sevBadge(e.sev)" x-text="e.sev"></span>
+                  <span class="flex-fill"><b x-text="e.title"></b> · <a href="#" class="ed-plink mono" @click.prevent="openDossier(e.path)" x-text="e.path"></a><div class="mono text-secondary text-break" x-text="e.cmd"></div></span></div>
+              </template>
+            </div>
+            <div class="card-body small border-top" x-show="sg">
+              <details x-show="sg && sg.status.skippedList.length"><summary class="text-secondary" x-text="(sg ? sg.status.skipped : 0) + ' rules not loaded'"></summary>
+                <table class="table table-sm mt-2"><tbody><template x-for="(s, i) in (sg ? sg.status.skippedList : [])" :key="i"><tr><td class="mono small" x-text="s.file"></td><td class="small text-secondary" x-text="s.why"></td></tr></template></tbody></table></details>
+              <div class="text-secondary mt-2">Your own rules: save macOS <code>process_creation</code> rules as <code>.yml</code> files in <code>$ARGUS_HOME/data/sigma/</code> . They load within a minute and replace a SigmaHQ rule with the same id. Fields available: <code>Image</code>, <code>CommandLine</code>, <code>ParentImage</code>.</div>
+            </div>
+          </div>
+        </div>
+
         <div x-show="tab === 'vulns'">
           <template x-if="!r.vulns"><div class="alert alert-info">No vulnerability data in this report yet.</div></template>
           <template x-if="r.vulns">
@@ -914,6 +1063,27 @@
         <!-- ============================================================ SOURCES -->
         <div x-show="tab === 'sources'" class="row row-cards">
           <div class="col-lg-6"><div class="card">
+            <div class="card-header"><h3 class="card-title">Pipeline health</h3><div class="card-actions small text-secondary" x-text="r.health ? (r.health.problems ? r.health.problems + ' need attention' : 'every input arriving') : ''"></div></div>
+            <div class="list-group list-group-flush small">
+              <template x-for="c in (r.health ? r.health.checks : [])" :key="c.id">
+                <div class="list-group-item"><div class="d-flex align-items-baseline gap-2"><i class="ed-dot" :style="'background:' + healthColor(c.status)"></i><strong class="flex-fill" x-text="c.title"></strong><span class="text-secondary nowrap" x-show="c.since" x-text="'noticed ' + fmt(c.since)"></span></div>
+                  <div class="text-secondary" x-show="c.detail && c.status !== 'ok'" x-text="c.detail"></div><code class="d-block mt-1" x-show="c.fix" x-text="c.fix"></code></div>
+              </template>
+            </div></div></div>
+          <div class="col-lg-6"><div class="card">
+            <div class="card-header"><h3 class="card-title">Alerts</h3><div class="card-actions"><button class="btn btn-sm" @click="testAlert()"><i class="ti ti-bell"></i> Send a test</button></div></div>
+            <div class="card-body small" x-show="r.alerts">
+              <p class="mb-2" x-text="'Alerts go out for new ' + (r.alerts ? (r.alerts.minSev === 'high' ? 'high' : r.alerts.minSev === 'medium' ? 'high and medium' : r.alerts.minSev + ' and worse') : '') + ' findings' + (r.alerts && r.alerts.health !== 'off' ? ' and for inputs that ' + (r.alerts.health === 'warn' ? 'stall or stop' : 'stop') : '') + '. Each finding alerts once, and again only when new evidence appears. Acknowledged findings never alert.'"></p>
+              <div class="list-group list-group-flush mb-2">
+                <template x-for="ch in [['mac', 'macOS notification', 'on by default; shown by the com.argus.notify agent (./argus.sh install-collector)'], ['ntfy', 'ntfy', 'ARGUS_NTFY_URL'], ['pushover', 'Pushover', 'PUSHOVER_TOKEN + PUSHOVER_USER'], ['webhook', 'Webhook', 'ARGUS_ALERT_WEBHOOK (Slack-compatible JSON)']]" :key="ch[0]">
+                  <div class="list-group-item px-0 d-flex gap-2 align-items-baseline"><i class="ed-dot" :style="'background:' + (r.alerts && r.alerts.channels[ch[0]] ? 'var(--ok)' : 'var(--rule)')"></i><strong x-text="ch[1]"></strong><span class="text-secondary flex-fill" x-text="r.alerts && r.alerts.channels[ch[0]] ? 'on' : 'off · set ' + ch[2]"></span></div>
+                </template>
+              </div>
+              <div class="text-secondary" x-text="r.alerts ? (r.alerts.armed ? (r.alerts.last ? 'Last alert ' + ago(r.alerts.last.at) + ': ' + r.alerts.last.title : 'No alert sent since Argus started.') : 'Arming: what is open now is recorded silently so you are not paged for the backlog.') : ''"></div>
+              <div class="text-red mt-1" x-show="r.alerts && r.alerts.error" x-text="r.alerts ? r.alerts.error : ''"></div>
+              <div class="mt-2" x-show="alertMsg" x-text="alertMsg"></div>
+            </div></div></div>
+          <div class="col-lg-6"><div class="card">
             <div class="card-header"><h3 class="card-title">Inputs</h3></div>
             <div class="list-group list-group-flush small">
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">Host collector</strong><span class="badge" :class="collectorFresh() ? 'bg-green-lt' : 'bg-orange-lt'" x-text="collectorFresh() ? 'reporting' : 'stale or not installed'"></span></div>
@@ -969,6 +1139,153 @@
   </div>
 
   <!-- indicator detail -->
+  <!-- ============================================================ PROGRAM DOSSIER -->
+  <div class="dos-wrap" x-show="dos || dosBusy || dosErr" x-cloak @keydown.escape.window="closeDossier()">
+    <div class="dos-backdrop" @click="closeDossier()"></div>
+    <article class="dos" role="dialog" aria-modal="true" aria-label="Program dossier">
+      <button class="dos-close" @click="closeDossier()" title="Close (Esc)"><i class="ti ti-x"></i></button>
+      <div class="ed-none py-5 text-center" x-show="dosBusy && !dos">Pulling the file…</div>
+      <div class="ed-none py-5 text-center" x-show="dosErr" x-text="dosErr"></div>
+      <template x-if="dos">
+        <div>
+          <header class="dos-mast">
+            <div class="ed-kicker" x-text="'Program dossier · ' + signerLabel(dos.signer)"></div>
+            <h1 class="dos-title" x-text="dos.name"></h1>
+            <div class="dos-path" x-text="dos.bundle || dos.path"></div>
+            <div class="dos-notes">
+              <template x-for="(n, i) in dos.notes" :key="i"><span class="dos-note" :style="'--c:' + sevColor(n.sev)" x-text="n.text"></span></template>
+              <span class="dos-note is-ok" x-show="!dos.notes.length">Nothing unusual on record</span>
+            </div>
+          </header>
+
+          <div class="ed-stats dos-stats">
+            <template x-for="s in dosStats()" :key="s.label">
+              <div class="ed-stat">
+                <div class="ed-stat-v" :style="s.color ? 'color:' + s.color : ''" x-text="s.value"></div>
+                <div class="ed-stat-l"><span x-text="s.label"></span> <span class="ed-stat-u" x-text="s.unit || ''"></span></div>
+              </div>
+            </template>
+          </div>
+
+          <div class="dos-grid">
+            <section>
+              <h2 class="dos-h">Who made it?</h2>
+              <dl class="dos-dl">
+                <dt>Signature</dt><dd x-text="signerLabel(dos.signer)"></dd>
+                <dt x-show="dos.team">Team ID</dt><dd class="mono" x-show="dos.team" x-text="dos.team"></dd>
+                <dt x-show="dos.ident">Identifier</dt><dd class="mono" x-show="dos.ident" x-text="dos.ident"></dd>
+                <template x-if="dos.app"><dt>Version</dt></template><template x-if="dos.app"><dd x-text="dos.app.version || '—'"></dd></template>
+                <template x-if="dos.app"><dt>Installed from</dt></template><template x-if="dos.app"><dd x-text="({ identified_developer: 'identified developer', mac_app_store: 'Mac App Store', apple: 'Apple', unknown: 'unknown source' })[dos.app.obtainedFrom] || dos.app.obtainedFrom || '—'"></dd></template>
+                <template x-if="dos.app && dos.app.signedBy.length"><dt>Certificate</dt></template><template x-if="dos.app && dos.app.signedBy.length"><dd x-text="dos.app.signedBy[0]"></dd></template>
+                <dt>Executable</dt><dd class="mono" x-text="dos.path"></dd>
+              </dl>
+              <template x-if="dos.binaries.length > 1">
+                <div>
+                  <div class="dos-sub">Programs in this bundle</div>
+                  <ul class="dos-list">
+                    <template x-for="b in dos.binaries.slice(0, 12)" :key="b.path"><li><span class="mono" x-text="b.path.replace(dos.bundle + '/', '')"></span><span class="dos-meta" x-text="num(b.count) + '×'"></span></li></template>
+                  </ul>
+                </div>
+              </template>
+            </section>
+
+            <section>
+              <h2 class="dos-h">Who started it?</h2>
+              <ul class="dos-list">
+                <template x-for="p in dos.parents" :key="p.path"><li><a href="#" class="mono" @click.prevent="openDossier(p.path)" x-text="p.path"></a><span class="dos-meta" x-text="ago(p.at)"></span></li></template>
+              </ul>
+              <div class="ed-none" x-show="!dos.parents.length" x-text="dos.esSince ? 'No launch recorded since Endpoint Security monitoring began (' + fmt(dos.esSince) + '). It was probably already running.' : 'Endpoint Security monitoring is not installed.'"></div>
+              <h2 class="dos-h mt-4">What did it start?</h2>
+              <ul class="dos-list">
+                <template x-for="c in dos.children.slice(0, 15)" :key="c.path"><li><a href="#" class="mono" @click.prevent="openDossier(c.path)" x-text="c.path"></a><span class="dos-meta" x-text="num(c.count) + '× · ' + ago(c.last_seen)"></span></li></template>
+              </ul>
+              <div class="ed-none" x-show="!dos.children.length">Nothing recorded.</div>
+            </section>
+
+            <section class="dos-wide">
+              <h2 class="dos-h">Who does it talk to?</h2>
+              <p class="dos-cap" x-text="dos.network.littleSnitch ? 'Little Snitch traffic over the last 7 days, largest first. Click a destination for its threat-intel record.' : (dos.network.sockets.length ? 'Open connections seen by lsof over the last 7 days (no byte counts without Little Snitch).' : 'No network activity recorded in the last 7 days.')"></p>
+              <table class="dos-table" x-show="dos.network.littleSnitch">
+                <thead><tr><th>Destination</th><th class="dos-barcol">Data</th><th class="text-end">Connections</th><th>Last</th></tr></thead>
+                <tbody>
+                  <template x-for="f in dos.network.flows.slice(0, 25)" :key="f.dest">
+                    <tr :class="f.flag && 'is-flag'">
+                      <td><a href="#" class="mono" @click.prevent="openIndicator(/^[\d.]+$|:/.test(f.dest) ? 'ip' : 'domain', f.dest)" x-text="f.dest"></a>
+                        <span class="dos-flag" x-show="f.flag" x-text="f.flag ? f.flag.risk + (f.flag.why ? ': ' + f.flag.why : '') : ''"></span></td>
+                      <td class="dos-barcol"><div class="dos-bar"><i :style="'width:' + dosBarPct(f) + '%'"></i><span x-text="bytes((f.bytes_in || 0) + (f.bytes_out || 0))"></span></div></td>
+                      <td class="text-end" x-text="num(f.connects) + (f.denies ? ' · ' + num(f.denies) + ' denied' : '')"></td>
+                      <td class="nowrap" x-text="ago(f.last_seen)"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <table class="dos-table" x-show="!dos.network.littleSnitch && dos.network.sockets.length">
+                <thead><tr><th>Address</th><th>Ports</th><th>First</th><th>Last</th></tr></thead>
+                <tbody>
+                  <template x-for="s in dos.network.sockets.slice(0, 25)" :key="s.remote">
+                    <tr :class="s.flag && 'is-flag'"><td><a href="#" class="mono" @click.prevent="openIndicator('ip', s.remote)" x-text="s.remote"></a> <span class="dos-flag" x-show="s.flag" x-text="s.flag ? s.flag.risk : ''"></span></td>
+                      <td class="mono" x-text="s.ports"></td><td class="nowrap" x-text="fmt(s.first_seen)"></td><td class="nowrap" x-text="ago(s.last_seen)"></td></tr>
+                  </template>
+                </tbody>
+              </table>
+            </section>
+
+            <section>
+              <h2 class="dos-h">What can it access?</h2>
+              <ul class="dos-list">
+                <template x-for="(t, i) in dos.permissions" :key="i"><li><span :class="t.high && 'dos-strong'" x-text="t.name"></span><span class="dos-meta" x-text="t.auth + ' · ' + t.db + (t.modified ? ' · ' + fmt(t.modified) : '')"></span></li></template>
+              </ul>
+              <div class="ed-none" x-show="!dos.permissions.length">No privacy permissions on record.</div>
+              <template x-if="dos.permissionEvents.length">
+                <div><div class="dos-sub">Recent permission changes</div>
+                  <ul class="dos-list"><template x-for="(e, i) in dos.permissionEvents.slice(0, 8)" :key="i"><li><span x-text="e.summary"></span><span class="dos-meta" x-text="fmt(e.ts)"></span></li></template></ul></div>
+              </template>
+            </section>
+
+            <section>
+              <h2 class="dos-h">Does it start itself?</h2>
+              <ul class="dos-list">
+                <template x-for="(b, i) in dos.persistence" :key="i"><li><span x-text="b.name + ' (' + (b.type || 'item') + ')'"></span><span class="dos-meta" :style="b.enabled ? 'color:' + sevColor('medium') : ''" x-text="b.enabled ? 'enabled' : 'disabled'"></span></li></template>
+                <template x-for="(c, i) in dos.persistenceChanges" :key="'c' + i"><li><span x-text="c.change + ': ' + c.name"></span><span class="dos-meta" x-text="fmt(c.at)"></span></li></template>
+              </ul>
+              <div class="ed-none" x-show="!dos.persistence.length && !dos.persistenceChanges.length">No login items or launchd jobs.</div>
+              <template x-if="dos.downloads.length">
+                <div><div class="dos-sub">Files it downloaded</div>
+                  <ul class="dos-list"><template x-for="(d, i) in dos.downloads.slice(0, 8)" :key="i"><li><span class="mono" x-text="d.host || d.url"></span><span class="dos-meta" x-text="fmt(d.ts)"></span></li></template></ul></div>
+              </template>
+            </section>
+
+            <section class="dos-wide" x-show="dos.findings.length">
+              <h2 class="dos-h">Findings that mention it</h2>
+              <ol class="ed-list">
+                <template x-for="(f, i) in dos.findings" :key="f.id">
+                  <li @click="closeDossier(); fArea = f.area; fSev = ['high','medium','low','info']; setTab('findings'); openFinding = f.id">
+                    <span class="ed-num" :style="'color:' + sevColor(f.sev)" x-text="String(i + 1).padStart(2, '0')"></span>
+                    <span class="ed-area" :style="'color:' + areaColor(f.area)" x-text="f.area"></span>
+                    <span class="ed-ftitle"><span x-text="plainTitle(f)"></span><span class="dos-meta" x-show="f.acked"> · acknowledged</span></span>
+                  </li>
+                </template>
+              </ol>
+            </section>
+
+            <section class="dos-wide">
+              <h2 class="dos-h">What has it done?</h2>
+              <p class="dos-cap">Endpoint Security events and Sigma matches that name this program, newest first.</p>
+              <ul class="dos-events">
+                <template x-for="(e, i) in dos.events.slice(0, 60)" :key="i">
+                  <li><span class="dos-when" x-text="fmt(e.ts)"></span><i class="ed-dot" :style="'background:' + sevColor(e.sev)"></i>
+                    <span><b x-show="e.sigma" x-text="e.sigma ? 'Sigma: ' + e.sigma.title + ' · ' : ''"></b><span class="mono" x-text="e.summary"></span>
+                      <a x-show="e.sigma && e.sigma.link" :href="e.sigma && e.sigma.link" target="_blank" rel="noopener" class="ms-1">rule</a></span></li>
+                </template>
+              </ul>
+              <div class="ed-none" x-show="!dos.events.length">No notable events.</div>
+            </section>
+          </div>
+          <footer class="ed-foot" x-text="'Argus dossier · ' + (dos.bundle ? 'covers every program inside ' + dos.bundle : dos.path)"></footer>
+        </div>
+      </template>
+    </article>
+  </div>
   <div class="modal modal-blur" :class="detail && 'd-block show'" tabindex="-1" x-show="detail" @keydown.escape.window="detail = null" @click.self="detail = null">
     <div class="modal-dialog modal-lg modal-dialog-scrollable" x-show="detail">
       <div class="modal-content" x-show="detail">
@@ -1017,7 +1334,7 @@ function argus() {
     tab: 'overview', macTab: 'access', openFinding: null,
     fSev: ['high', 'medium', 'low'], fArea: '', fQ: '', fLimit: 100,
     ind: { total: 0, rows: [] }, iRisk: 'flagged', iType: '', iSource: '', iQ: '', iOffset: 0,
-    detail: null, lookupQ: '', lookupBusy: false, lookupErr: '',
+    detail: null, sg: null, sgQ: '', sgAll: false, dos: null, dosBusy: false, dosErr: '', findQ: '', findRes: [], findBusy: false, alertMsg: '', lookupQ: '', lookupBusy: false, lookupErr: '',
     hideCollector: true, showPassing: false, showAcked: false, ackNote: '', ackBusy: false, thirdPartyTcc: true, showScans: false,
     macTabs: [{ id: 'access', label: 'Access' }, { id: 'permissions', label: 'Permissions & Gatekeeper' }, { id: 'persistence', label: 'Persistence' },
       { id: 'network', label: 'Network' }, { id: 'crashes', label: 'Crashes' }, { id: 'system', label: 'System' }],
@@ -1194,7 +1511,8 @@ function argus() {
     clockSvg() {
       const tl = ((this.r && this.r.timeline) || []).slice(-24), cats = this.tlCats();
       const S = 280, c = S / 2, r0 = 58, r1 = 128, tot = x => cats.reduce((a, [k]) => a + (x[k] || 0), 0);
-      const max = Math.max(1, ...tl.map(tot));
+      const norm = this.clockNormal();
+      const max = Math.max(1, ...tl.map(tot), ...(norm || []));
       const rad = v => r0 + (r1 - r0) * Math.sqrt(v / max);
       const pt = (r, a) => [c + r * Math.sin(a), c - r * Math.cos(a)];
       const arc = (ra, rb, a0, a1) => { const [x0, y0] = pt(ra, a0), [x1, y1] = pt(rb, a0), [x2, y2] = pt(rb, a1), [x3, y3] = pt(ra, a1);
@@ -1215,12 +1533,81 @@ function argus() {
         }
       }
       const [nx, ny] = pt(r1 + 2, (now + .5) * Math.PI / 12), [mx, my] = pt(r0 - 2, (now + .5) * Math.PI / 12);
+      if (norm) {
+        let d = '';
+        for (let h = 0; h < 24; h++) {
+          const rr = rad(norm[h]), a0 = h * Math.PI / 12, a1 = (h + 1) * Math.PI / 12, [x0, y0] = pt(rr, a0), [x1, y1] = pt(rr, a1);
+          d += `${h ? 'L' : 'M'}${x0.toFixed(1)} ${y0.toFixed(1)}A${rr.toFixed(1)} ${rr.toFixed(1)} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+        }
+        out.push(`<path d="${d}Z" fill="none" stroke="var(--ink)" stroke-width="1.1" stroke-dasharray="2 2.5" opacity=".7"><title>7-day normal for each hour</title></path>`);
+      }
       out.push(`<line x1="${mx}" y1="${my}" x2="${nx}" y2="${ny}" stroke="var(--ink)" stroke-width="1" opacity=".55"/><circle cx="${nx}" cy="${ny}" r="2.6" fill="var(--ink)"/>`);
       const name = this.esc((this.r && this.r.host.name) || 'Mac'), sum = tl.reduce((a, x) => a + tot(x), 0);
       out.push(`<text x="${c}" y="${c - 4}" text-anchor="middle" style="font:600 22px Fraunces,Georgia,serif;fill:var(--ink)">${this.num(sum)}</text>`);
       out.push(`<text x="${c}" y="${c + 14}" text-anchor="middle" style="font:600 11px Fraunces,Georgia,serif;font-variant:small-caps;letter-spacing:.08em;fill:var(--muted)">${name} · 24 h</text>`);
       out.push('</svg>');
       return out.join('');
+    },
+    // Average events per local hour over the 7 days before the last 24 hours (needs 3+ days).
+    clockNormal() {
+      const h = (this.r && this.r.history && this.r.history.hourly) || [];
+      const now = Date.now(), from = now - 8 * 864e5, to = now - 864e5;
+      const sums = Array(24).fill(0), days = new Set();
+      for (const [t, v] of h) if (t >= from && t < to) { sums[new Date(t).getHours()] += v; days.add(new Date(t).toDateString()); }
+      return days.size >= 3 ? sums.map(s => s / days.size) : null;
+    },
+    trendData() {
+      const f = this.r && this.r.history && this.r.history.findings;
+      if (!f || !f.days || f.days.length < 2) return null;
+      const ev = new Map();
+      for (const [t, v] of (this.r.history.hourly || [])) { const k = new Date(t).toDateString(); ev.set(k, (ev.get(k) || 0) + v); }
+      return { ...f, events: f.days.map(t => ev.get(new Date(t).toDateString()) || 0) };
+    },
+    trendSub() {
+      const d = this.trendData();
+      if (!d) return 'Argus keeps an hourly snapshot of what is open. The first trend line appears after two days.';
+      const n = d.days.length, day = t => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const hi = d.total.high, me = d.total.medium;
+      const b = (s, v) => `<b style="color:${this.sevColor(s)}">${v}</b>`;
+      return `Open findings at the end of each day for the last ${n} days, over security events per day. Since ${day(d.days[0])}: high ${b('high', hi[0])} → ${b('high', hi[n - 1])}, medium ${b('medium', me[0])} → ${b('medium', me[n - 1])}.`;
+    },
+    trendSvg() {
+      const d = this.trendData(); if (!d) return '';
+      const W = 1100, H = 250, l = 36, r = 110, t = 16, b = 30, n = d.days.length;
+      const hi = d.total.high, me = d.total.medium, lmax = Math.max(1, ...hi, ...me), emax = Math.max(1, ...d.events);
+      const x = i => l + (W - l - r) * (n === 1 ? .5 : i / (n - 1)), y = v => t + (H - t - b) * (1 - v / lmax);
+      const bw = Math.max(2, (W - l - r) / n * .55);
+      const out = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Open findings per day">`];
+      d.events.forEach((v, i) => { const h = (H - t - b) * v / emax; out.push(`<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${(H - b - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="var(--ink)" opacity=".08"><title>${this.esc(new Date(d.days[i]).toLocaleDateString())}: ${this.num(v)} events</title></rect>`); });
+      for (const g of [lmax, Math.round(lmax / 2)].filter((v, i, a) => v > 0 && a.indexOf(v) === i)) out.push(`<line class="axis" x1="${l}" x2="${W - r}" y1="${y(g)}" y2="${y(g)}" stroke-dasharray="3 4"/><text x="${l - 6}" y="${y(g) + 4}" text-anchor="end" font-size="11">${g}</text>`);
+      out.push(`<line class="axis" x1="${l}" x2="${W - r}" y1="${H - b}" y2="${H - b}"/>`);
+      const line = (arr, s, w) => {
+        out.push(`<polyline fill="none" stroke="${this.sevColor(s)}" stroke-width="${w}" stroke-linejoin="round" points="${arr.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}"/>`);
+        arr.forEach((v, i) => out.push(`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${i === n - 1 ? 4 : 2}" fill="${this.sevColor(s)}"><title>${this.esc(new Date(d.days[i]).toLocaleDateString())}: ${v} ${s}</title></circle>`));
+        out.push(`<text x="${x(n - 1) + 10}" y="${y(arr[n - 1]) + 4}" style="font:600 13px Fraunces,Georgia,serif;fill:${this.sevColor(s)}">${arr[n - 1]} ${s}</text>`);
+      };
+      line(me, 'medium', 2); line(hi, 'high', 3);
+      const ticks = n > 2 ? [0, Math.floor((n - 1) / 2), n - 1] : [0, n - 1];
+      ticks.forEach(i => out.push(`<text x="${x(i)}" y="${H - 10}" text-anchor="middle" font-size="11">${this.esc(new Date(d.days[i]).toLocaleDateString([], { month: 'short', day: 'numeric' }))}</text>`));
+      out.push(`<text x="${W - r + 10}" y="${H - b - 4}" font-size="10.5" style="fill:var(--muted)">bars: events/day</text>`);
+      out.push('</svg>');
+      return out.join('');
+    },
+    trendAreas() {
+      const d = this.trendData(); if (!d) return [];
+      const n = d.days.length, wk = Math.max(0, d.days.findIndex(t => t >= Date.now() - 7 * 864e5) - 1);
+      return Object.entries(d.areas).map(([area, s]) => {
+        const v = s.high.map((h, i) => h + s.medium[i]), now = v[n - 1], then = v[wk];
+        const delta = now - then;
+        return { area, v, hi: s.high, now, max: Math.max(...v), delta, deltaHtml: delta ? `<b style="color:${delta > 0 ? this.sevColor('high') : 'var(--ok)'}">${delta > 0 ? '▲' : '▼'} ${Math.abs(delta)}</b> vs a week ago` : 'level with a week ago' };
+      }).filter(a => a.max > 0).sort((a, b) => b.now - a.now || b.max - a.max).slice(0, 12);
+    },
+    sparkSvg(m) {
+      const W = 220, H = 54, n = m.v.length, max = Math.max(1, ...m.v), c = this.areaColor(m.area);
+      const x = i => 2 + (W - 8) * (n === 1 ? .5 : i / (n - 1)), y = v => 4 + (H - 10) * (1 - v / max);
+      const pts = m.v.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+      return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:54px;display:block"><polygon points="${x(0)},${H - 6} ${pts} ${x(n - 1)},${H - 6}" fill="${c}" opacity=".14"/><polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.8"/>`
+        + `<circle cx="${x(n - 1)}" cy="${y(m.v[n - 1])}" r="3" fill="${c}"/><line x1="0" x2="${W}" y1="${H - 6}" y2="${H - 6}" stroke="var(--rule)"/></svg>`;
     },
     portraitSub() {
       const a = this.areaStats();
@@ -1315,7 +1702,7 @@ function argus() {
     },
     talkersSub() {
       const t = this.talkers(), odd = t.filter(x => x.cls === 'Unsigned / ad-hoc').length, fl = t.filter(x => x.flagged).length;
-      return `<b>${t.length}</b> programs with network traffic, last 24 h, grouped by signer. Y axis: ${t.some(x => x.bytes) ? 'bytes transferred (log)' : 'connections (log; bytes once Little Snitch data arrives)'}. Unsigned or ad-hoc: <b style="color:${odd ? this.sevColor('medium') : 'inherit'}">${odd}</b>.${fl ? ` Contacted flagged destinations: <b style="color:${this.sevColor('high')}">${fl}</b> (ringed).` : ''}`;
+      return `<b>${t.length}</b> programs with network traffic, last 24 h, grouped by signer; click a dot for its dossier. Y axis: ${t.some(x => x.bytes) ? 'bytes transferred (log)' : 'connections (log; bytes once Little Snitch data arrives)'}. Unsigned or ad-hoc: <b style="color:${odd ? this.sevColor('medium') : 'inherit'}">${odd}</b>.${fl ? ` Contacted flagged destinations: <b style="color:${this.sevColor('high')}">${fl}</b> (ringed).` : ''}`;
     },
     talkersSvg() {
       const t = this.talkers(); if (!t.length) return '';
@@ -1339,7 +1726,7 @@ function argus() {
         });
         const hitsDot = b => placed.some(q => q.x + q.r > b[0] && q.x - q.r < b[2] && q.y + q.r > b[1] && q.y - q.r < b[3]);
         placed.forEach(({ x: xx, y: yy, r, p }, j) => {
-          out.push(`<circle cx="${xx}" cy="${yy}" r="${r}" fill="${colColor[c]}" opacity="${p.flagged ? 1 : .72}" ${p.flagged ? `stroke="${this.sevColor('high')}" stroke-width="3"` : ''}><title>${this.esc(p.path)}\n${p.bytes ? this.esc(this.bytes(p.bytes)) + ' · ' : ''}${p.remotes || 0} remote addresses${p.hosts.length ? '\n' + this.esc(p.hosts.slice(0, 4).join(', ')) : ''}</title></circle>`);
+          out.push(`<circle data-dossier="${this.esc(p.path)}" cx="${xx}" cy="${yy}" r="${r}" fill="${colColor[c]}" opacity="${p.flagged ? 1 : .72}" ${p.flagged ? `stroke="${this.sevColor('high')}" stroke-width="3"` : ''}><title>${this.esc(p.path)}\n${p.bytes ? this.esc(this.bytes(p.bytes)) + ' · ' : ''}${p.remotes || 0} remote addresses${p.hosts.length ? '\n' + this.esc(p.hosts.slice(0, 4).join(', ')) : ''}</title></circle>`);
           if (j < 6 || p.flagged) {
             const label = p.name.length > 24 ? p.name.slice(0, 23) + '…' : p.name, lw = label.length * 6.2 + 4;
             const tries = [[xx + r + 4, 'start'], [xx - r - 4, 'end']];
@@ -1348,7 +1735,7 @@ function argus() {
               if (x1 < x0 + 2 || x1 + lw > x0 + cw - 2) continue;
               if (labels.some(b => !(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3])) || hitsDot(box)) continue;
               labels.push(box);
-              out.push(`<text class="lbl" x="${lx}" y="${yy + 4}" text-anchor="${anchor}"${p.flagged ? ` style="fill:${this.sevColor('high')};font-weight:700"` : ''}>${this.esc(label)}</text>`);
+              out.push(`<text class="lbl" data-dossier="${this.esc(p.path)}" x="${lx}" y="${yy + 4}" text-anchor="${anchor}"${p.flagged ? ` style="fill:${this.sevColor('high')};font-weight:700"` : ''}>${this.esc(label)}</text>`);
               break;
             }
           }
@@ -1367,6 +1754,91 @@ function argus() {
     },
 
 
+    // ---------------------------------------------------------- dossier, search, health, alerts
+    async openDossier(p) {
+      if (!p) return;
+      this.dos = null; this.dosErr = ''; this.dosBusy = true; document.body.classList.add('dos-open');
+      try {
+        const res = await fetch('/api/program?path=' + encodeURIComponent(p));
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+        this.dos = Object.freeze(j);
+        this.$nextTick(() => { const a = document.querySelector('.dos-wrap'); if (a) a.scrollTop = 0; });
+      } catch (e) { this.dosErr = 'Could not load the dossier: ' + e.message; }
+      this.dosBusy = false;
+    },
+    closeDossier() { this.dos = null; this.dosBusy = false; this.dosErr = ''; document.body.classList.remove('dos-open'); },
+    dosClick(ev) {
+      const a = ev.target.closest('[data-dossier]');
+      if (!a) return;
+      ev.preventDefault(); ev.stopPropagation();
+      this.openDossier(a.getAttribute('data-dossier'));
+    },
+    async findPrograms(q) {
+      this.findQ = q;
+      if (q.trim().length < 2) { this.findRes = []; return; }
+      this.findBusy = true;
+      try { this.findRes = await (await fetch('/api/programs?q=' + encodeURIComponent(q.trim()))).json(); } catch (e) { this.findRes = []; }
+      this.findBusy = false;
+    },
+    signerLabel(c) { return ({ apple: 'Apple', appstore: 'App Store', devid: 'Developer ID', adhoc: 'Ad-hoc signed', unsigned: 'Unsigned', other: 'Other signature' })[c] || 'Signer unknown'; },
+    dosStats() {
+      const d = this.dos; if (!d) return [];
+      const t = d.network.totals || {}, rx = this.bytes(t.bytes_in || 0).split(' '), tx = this.bytes(t.bytes_out || 0).split(' ');
+      const open = d.findings.filter(f => !f.acked), worst = open.some(f => f.sev === 'high') ? 'high' : open.some(f => f.sev === 'medium') ? 'medium' : '';
+      const day = ms => new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return [
+        { label: 'Launches', value: d.launches ? this.num(d.launches) : '—', unit: d.esSince ? 'since ' + day(d.esSince) : '' },
+        { label: 'First seen', value: d.firstSeen ? day(d.firstSeen) : '—' },
+        { label: 'Destinations', value: this.num(d.network.littleSnitch ? (t.dests || 0) : d.network.sockets.length), unit: '7 d' },
+        { label: 'Received', value: d.network.littleSnitch ? rx[0] : '—', unit: d.network.littleSnitch ? rx[1] : '' },
+        { label: 'Sent', value: d.network.littleSnitch ? tx[0] : '—', unit: d.network.littleSnitch ? tx[1] : '' },
+        { label: 'Findings', value: open.length, color: worst ? this.sevColor(worst) : '' },
+      ];
+    },
+    dosBarPct(f) {
+      const max = Math.max(1, ...this.dos.network.flows.map(x => (x.bytes_in || 0) + (x.bytes_out || 0)));
+      const v = (f.bytes_in || 0) + (f.bytes_out || 0);
+      return v ? Math.max(2, Math.round(100 * Math.log10(1 + v) / Math.log10(1 + max))) : 0;
+    },
+    // Evidence text with absolute paths turned into dossier links. Paths inside an app
+    // bundle resolve to the whole bundle, so a path cut at a space still lands right.
+    evidenceHtml(lines) {
+      const re = /(\/(?:Applications|Users|Library|System|usr|opt|private|bin|sbin|var|tmp|Volumes)(?:\/[^/\n:()[\],;'"→←<>&]+(?=\/))*\/[^\s/:()[\],;'"→←<>&]+)/g;
+      return (lines || []).map(l => this.esc(l).replace(re, m => `<a href="#" class="ed-plink" data-dossier="${m}">${m}</a>`)).join('\n');
+    },
+    healthBad() { return this.r && this.r.health ? this.r.health.checks.filter(c => c.status !== 'ok') : []; },
+    healthColor(s) { return s === 'ok' ? 'var(--ok)' : s === 'warn' ? 'var(--sev-medium)' : 'var(--sev-high)'; },
+    async testAlert() {
+      this.alertMsg = 'Sending…';
+      try {
+        const j = await (await fetch('/api/alerts/test', { method: 'POST' })).json();
+        const on = Object.entries(j.channels || {}).filter(([, v]) => v).map(([k]) => k);
+        this.alertMsg = j.ok ? `Sent to ${on.join(', ') || 'no channel'}.` : `Problem: ${j.error}`;
+      } catch (e) { this.alertMsg = 'Could not send: ' + e.message; }
+    },
+    async loadSigma() {
+      try { this.sg = Object.freeze(await (await fetch('/api/sigma')).json()); } catch (e) { this.error = 'Could not load Sigma rules: ' + e.message; }
+    },
+    async muteRule(g, on) {
+      try {
+        const res = await fetch('/api/sigma/mute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: g.id, muted: on }) });
+        if (!res.ok) throw new Error((await res.json()).error || 'HTTP ' + res.status);
+        await this.loadSigma();
+      } catch (e) { this.error = 'Could not change the rule: ' + e.message; }
+    },
+    sigmaRows() {
+      if (!this.sg) return [];
+      const q = this.sgQ.trim().toLowerCase(), rank = { critical: 0, high: 1, medium: 2, low: 3, informational: 4 };
+      return this.sg.rules.filter(g => (this.sgAll || q || g.hits || g.muted) && (!q || (g.title + ' ' + g.id + ' ' + (g.tags || []).join(' ')).toLowerCase().includes(q)))
+        .sort((a, b) => b.hits - a.hits || (rank[a.level] ?? 9) - (rank[b.level] ?? 9) || a.title.localeCompare(b.title));
+    },
+    sigmaSummary() {
+      if (!this.sg) return 'Loading…';
+      const s = this.sg.status, hit = this.sg.rules.filter(g => g.hits).length;
+      if (!s.enabled) return 'Sigma is switched off (<code>ARGUS_SIGMA=0</code>).';
+      return `<b>${s.rules}</b> rules active${s.local ? ` (${s.local} local)` : ''}${s.muted ? `, <b>${s.muted}</b> muted` : ''}, ${s.skipped} not loaded. <b>${hit}</b> ${hit === 1 ? 'rule has' : 'rules have'} matched${this.sg.since ? ' since ' + this.fmt(this.sg.since) : ''}. SigmaHQ rules refreshed ${this.ago(s.updated)}${s.error ? ` · <span class="text-red">${this.esc(s.error)}</span>` : ''}. Muting a rule stops new matches and hides its existing ones from the findings.`;
+    },
     async ackFinding(f, undo) {
       this.ackBusy = true;
       try {

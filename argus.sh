@@ -43,6 +43,8 @@ VOLUMES="argus-state argus-cs-config argus-cs-data"
 LIBEXEC="/usr/local/libexec/argus"
 DAEMON_LABEL="com.argus.collect"
 AGENT_LABEL="com.argus.collect.user"
+NOTIFY_LABEL="com.argus.notify"
+NOTIFY_PLIST="$HOME/Library/LaunchAgents/$NOTIFY_LABEL.plist"
 DAEMON_PLIST="/Library/LaunchDaemons/$DAEMON_LABEL.plist"
 AGENT_PLIST="$HOME/Library/LaunchAgents/$AGENT_LABEL.plist"
 STREAM_LABEL="com.argus.logstream"
@@ -458,6 +460,37 @@ EOF
 EOF
   launchctl bootout "gui/$uid/$AGENT_LABEL" >/dev/null 2>&1 || true
   launchctl bootstrap "gui/$uid" "$AGENT_PLIST"
+
+  # macOS notifications for alerts: launchd runs the notifier the moment the
+  # container appends to data/alerts/outbox.tsv.
+  log "writing $NOTIFY_PLIST"
+  local alerts="$DATA_DIR/alerts" port
+  port="$(env_val ARGUS_HTTP_PORT 7080)"
+  sudo install -o root -g wheel -m 0755 "$REPO/collector/argus-notify.sh" "$LIBEXEC/argus-notify.sh"
+  mkdir -p "$alerts" "$HOME/Library/Application Support/Argus"
+  # start from the end so old alerts are not replayed
+  stat -f %z "$alerts/outbox.tsv" 2>/dev/null > "$HOME/Library/Application Support/Argus/notify.offset" || echo 0 > "$HOME/Library/Application Support/Argus/notify.offset"
+  cat > "$NOTIFY_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$NOTIFY_LABEL</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>$LIBEXEC/argus-notify.sh</string></array>
+  <key>EnvironmentVariables</key>
+  <dict><key>ARGUS_ALERTS</key><string>$alerts</string><key>ARGUS_URL</key><string>http://127.0.0.1:$port/</string></dict>
+  <key>WatchPaths</key><array><string>$alerts</string></array>
+  <key>ThrottleInterval</key><integer>5</integer>
+  <key>ProcessType</key><string>Interactive</string>
+  <key>StandardOutPath</key><string>$HOME/Library/Logs/argus-notify.log</string>
+  <key>StandardErrorPath</key><string>$HOME/Library/Logs/argus-notify.log</string>
+</dict>
+</plist>
+EOF
+  launchctl bootout "gui/$uid/$NOTIFY_LABEL" >/dev/null 2>&1 || true
+  launchctl bootstrap "gui/$uid" "$NOTIFY_PLIST"
+  ok "alert notifier watching $alerts (test it from Sources & feeds › Alerts › Send a test)"
   ok "collector running: system every 5 min (log /var/log/argus-collect.log), user every 15 min"
   echo "    first unified-log batch appears in $inbox/unified within a minute"
 }
@@ -466,7 +499,8 @@ cmd_uninstall_collector() {
   log "removing collector"
   sudo launchctl bootout "system/$DAEMON_LABEL" >/dev/null 2>&1 || true
   launchctl bootout "gui/$(id -u)/$AGENT_LABEL" >/dev/null 2>&1 || true
-  sudo rm -f "$DAEMON_PLIST"; rm -f "$AGENT_PLIST"
+  launchctl bootout "gui/$(id -u)/$NOTIFY_LABEL" >/dev/null 2>&1 || true
+  sudo rm -f "$DAEMON_PLIST"; rm -f "$AGENT_PLIST" "$NOTIFY_PLIST"
   sudo rm -rf "$LIBEXEC"
   ok "collector removed (inbox left in place; delete it yourself if you want)"
 }

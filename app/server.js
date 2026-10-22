@@ -13,6 +13,11 @@ const { Intel } = require('./lib/intel');
 const { Throughput } = require('./lib/throughput');
 const { MacIngest, SyslogTail, PiHole } = require('./lib/ingest');
 const { FindingState } = require('./lib/findings');
+const { Health } = require('./lib/health');
+const { Alerts } = require('./lib/alerts');
+const { dossier, searchPrograms } = require('./lib/dossier');
+const { Trends } = require('./lib/trends');
+const { weeklyDue, weeklyHtml, writeWeekly } = require('./lib/weekly');
 
 const log = logger('argus');
 const store = new Store(cfg.state);
@@ -24,6 +29,9 @@ const mac = new MacIngest(store, intel, tp);
 const syslog = new SyslogTail(store, intel, tp);
 const pihole = new PiHole(mac, intel, store, tp);
 const fstate = new FindingState(store);
+const health = new Health();
+const alerts = new Alerts(store);
+const trends = new Trends(store);
 
 let report = null, reportAt = 0;
 const started = Date.now();
@@ -54,6 +62,9 @@ function buildReport() {
   findings.forEach(f => { if (!f.acked) counts[f.sev]++; });
   fstate.snapshot(findings);
   const changes = fstate.changes(findings);
+  try { trends.record(m.timeline); } catch (e) { log.warn(`trends: ${e.message}`); }
+  let hc = null;
+  try { hc = health.check({ mac, feeds, cs }); } catch (e) { log.error(`health: ${e.stack}`); }
   report = {
     generated: new Date(), version: cfg.version, uptime: Date.now() - started,
     host: { name: mac.meta.host || m.meta.host || cfg.macHost || '', os: mac.meta.os || m.meta.os || '', build: m.meta.build || '', tz: process.env.TZ || '' },
@@ -68,6 +79,7 @@ function buildReport() {
     inputs: { collector: mac.status(), pihole: pihole.status(), intelowl: { configured: !!(cfg.intelowl.url && cfg.intelowl.token), url: cfg.intelowl.publicUrl || cfg.intelowl.url, playbook: cfg.intelowl.playbook } },
     throughput: tp.summary(24, 10),
     hostsec: m.hostsec || null, vulns: m.vulns || null,
+    health: hc, alerts: alerts.status(), history: trends.view(),
   };
   reportAt = Date.now();
   return report;
@@ -98,9 +110,10 @@ async function main() {
   every('crowdsec', 60e3, () => cs.poll(), log);
   every('feeds', 10 * 60e3, () => feeds.refresh(false), log);
   every('intel', cfg.osint.autoEvery, () => intel.tick(), log);
-  every('report', 60e3, async () => { buildReport(); }, log);
+  every('report', 60e3, async () => { buildReport(); await alerts.process(report); }, log);
   every('export', 5 * 60e3, async () => { exportFiles(); }, log);
   every('digest', 10 * 60e3, async () => { if (fstate.digestDue()) fstate.writeDigest(report || buildReport()); }, log);
+  every('weekly', 10 * 60e3, async () => { if (weeklyDue()) writeWeekly(report || buildReport(), { fstate, trends }); }, log);
   every('housekeeping', 3600e3, async () => { mac.prune(); intel.prune(cfg.retainDays * 2); store.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); }, log);
 
   const app = express();
@@ -211,6 +224,24 @@ async function main() {
     fstate.unack(String((req.body && req.body.id) || '')); buildReport(); res.json({ ok: true });
   });
   app.get('/api/findings/acks', (req, res) => res.json(fstate.acks()));
+  app.get('/api/program', (req, res) => {
+    try { res.json(dossier(mac.hostsec, report || buildReport(), String(req.query.path || ''))); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+  });
+  app.get('/api/programs', (req, res) => res.json(searchPrograms(mac.hostsec, req.query.q)));
+  app.get('/api/health/checks', (req, res) => res.json((report || buildReport()).health));
+  app.get('/api/weekly', (req, res) => {
+    const r = report || buildReport();
+    res.type('html').send(req.query.save ? writeWeekly(r, { fstate, trends }) : weeklyHtml(r, { fstate, trends }));
+  });
+  app.get('/api/sigma', (req, res) => res.json(mac.hostsec.sigmaPanel()));
+  app.post('/api/sigma/mute', (req, res) => {
+    const id = String((req.body && req.body.id) || '');
+    if (!mac.hostsec.sigma.list().some(r => r.id === id)) return res.status(404).json({ error: 'no such rule' });
+    mac.hostsec.sigma.setMuted(id, !!(req.body && req.body.muted));
+    mac.dirty = true; buildReport(); res.json({ ok: true });
+  });
+  app.post('/api/alerts/test', async (req, res) => res.json(await alerts.test()));
   app.get('/api/digest', (req, res) => {
     const r = report || buildReport();
     const html = req.query.fresh ? fstate.writeDigest(r) : (() => { try { return fs.readFileSync(path.join(cfg.data, 'reports', 'digest-latest.html'), 'utf8'); } catch (e) { return fstate.writeDigest(r); } })();

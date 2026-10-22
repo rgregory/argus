@@ -91,6 +91,13 @@ for public blocklists.
 (cisa.gov) and Apple's security-release index (support.apple.com), twice a
 day. Nothing about your Mac is sent.
 
+**Alerts**, only if you configure them: ntfy (`ARGUS_NTFY_URL`), Pushover or
+a webhook receive the alert title, the host name, the finding title and its
+first evidence line (often a file path or command line). Nothing else is sent.
+A topic on the public ntfy.sh server is readable by anyone who knows its
+name, so use a long random topic, an access token, or your own ntfy server.
+macOS notifications stay on the Mac.
+
 **Homebrew advisories** are checked by `brew vulns` on the Mac, which
 fetches Homebrew's advisory database. Only when `brew vulns` isn't available
 does the container fall back to OSV.dev, and then it **sends the source
@@ -176,6 +183,10 @@ settings without touching your admin login.
   of trusting jsDelivr and each library's own minor/patch releases. Vendor
   these files into `app/public/vendor/` instead if you need the dashboard to
   work fully offline or want byte-for-byte reproducibility.
+- The dashboard and the weekly edition load the Fraunces and Source Serif 4
+  typefaces from Google Fonts (fonts.googleapis.com, fonts.gstatic.com), so
+  your browser contacts Google when it opens them. Nothing about the Mac is
+  sent; without a connection the pages fall back to Georgia.
 - `npm ci --omit=dev` is run at build time from the checked-in
   `package-lock.json`, so Node dependency versions are pinned and
   reproducible as long as the lockfile is kept up to date.

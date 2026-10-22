@@ -54,9 +54,24 @@ expect 401 "digest without a token"              "$u/api/digest"
 expect 200 "digest with the token"               -H "Authorization: Bearer $token" "$u/api/digest"
 expect 403 "vulnerability refresh from another website" -X POST -H "Origin: http://evil.example" -H "Cookie: argus_token=$token" "$u/api/vulns/refresh"
 
+expect 401 "dossier without a token"              "$u/api/program?path=/bin/ls"
+expect 200 "dossier with the token"               -H "Authorization: Bearer $token" "$u/api/program?path=/bin/ls"
+expect 400 "dossier for a relative path"          -H "Authorization: Bearer $token" "$u/api/program?path=ls"
+expect 200 "program search"                       -H "Authorization: Bearer $token" "$u/api/programs?q=ls"
+expect 200 "pipeline health"                      -H "Authorization: Bearer $token" "$u/api/health/checks"
+expect 401 "test alert without a token"           -X POST "$u/api/alerts/test"
+expect 403 "test alert from another website"      -X POST -H "Origin: http://evil.example" -H "Cookie: argus_token=$token" "$u/api/alerts/test"
+expect 200 "test alert from the dashboard"        -X POST -H "Origin: $u" -H "Cookie: argus_token=$token" "$u/api/alerts/test"
+
+expect 401 "weekly edition without a token"       "$u/api/weekly"
+expect 200 "weekly edition with the token"        -H "Authorization: Bearer $token" "$u/api/weekly"
+expect 200 "Sigma panel"                          -H "Authorization: Bearer $token" "$u/api/sigma"
+expect 404 "mute an unknown Sigma rule"           -X POST -H "Origin: $u" -H "Cookie: argus_token=$token" -H "Content-Type: application/json" -d '{"id":"no-such-rule","muted":true}' "$u/api/sigma/mute"
+expect 403 "mute a Sigma rule from another website" -X POST -H "Origin: http://evil.example" -H "Cookie: argus_token=$token" -H "Content-Type: application/json" -d '{"id":"x","muted":true}' "$u/api/sigma/mute"
+
 # the report carries the endpoint and vulnerability sections
-if curl -fsS -H "Authorization: Bearer $token" "$u/api/report" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);process.exit(r.hostsec&&r.vulns?0:1)})'; then
-  echo "ok         report has hostsec and vulns sections"
+if curl -fsS -H "Authorization: Bearer $token" "$u/api/report" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);process.exit(r.hostsec&&r.vulns&&r.health&&r.alerts&&r.history?0:1)})'; then
+  echo "ok         report has hostsec, vulns, health, alerts and history sections"
 else echo "FAIL       report is missing hostsec/vulns"; fail=1; fi
 
 if [ "$fail" != 0 ]; then echo "--- server log"; cat "$tmp/server.log"; exit 1; fi

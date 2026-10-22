@@ -78,6 +78,32 @@ sudo launchctl kickstart -k system/com.argus.tcc
 <p><code>brew install grype</code> (or <code>trivy</code>). The user job finds it on its next run and scans the images of your running containers once a day; results appear on the Vulnerabilities tab.</p>
 <h3 id="little-snitch">Little Snitch</h3>
 <p>If <a href="https://obdev.at/littlesnitch">Little Snitch</a> is installed, the root collector reads its traffic history every 5 minutes with Little Snitch's own <code>littlesnitch log-traffic</code> command. Turn on Little Snitch → Settings → Security → <strong>Allow access via Terminal</strong>, or the command refuses. Nothing else is needed; <code>sudo grep -i littlesnitch /var/log/argus-collect.log</code> shows a row count per run once it's working.</p>
+<h3 id="alerts">Alerts</h3>
+<p>macOS notifications work as soon as <code>./argus.sh install-collector</code> has run: it installs a small LaunchAgent (<code>com.argus.notify</code>) that shows each new alert the container writes to <code>data/alerts/</code>. With <code>terminal-notifier</code> installed (<code>brew install terminal-notifier</code>), clicking a notification opens the dashboard.</p>
+<p>To get alerts on your phone, set one of these in <code>argus.env</code> and run <code>./argus.sh restart</code>:</p>
+<table class="table table-sm">
+<thead>
+<tr>
+<th>Service</th>
+<th>Settings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://ntfy.sh">ntfy</a></td>
+<td><code>ARGUS_NTFY_URL=https://ntfy.sh/&lt;long-random-topic&gt;</code> (and <code>ARGUS_NTFY_TOKEN</code> for a protected topic)</td>
+</tr>
+<tr>
+<td><a href="https://pushover.net">Pushover</a></td>
+<td><code>PUSHOVER_TOKEN</code> and <code>PUSHOVER_USER</code></td>
+</tr>
+<tr>
+<td>Slack or similar</td>
+<td><code>ARGUS_ALERT_WEBHOOK=&lt;incoming webhook URL&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<p>Then use Sources &amp; feeds › Alerts › Send a test. <code>ARGUS_ALERT_SEV=medium</code> also alerts on medium findings; <code>ARGUS_ALERT_HEALTH=off</code> stops alerts about stalled inputs.</p>
 <h2 id="5-start-argus">5. Start Argus</h2>
 <pre><code class="language-bash">./argus.sh up
 </code></pre>

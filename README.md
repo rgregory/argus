@@ -327,6 +327,26 @@ Open a finding to see its evidence. If it's expected, acknowledge it, with a not
 
 With endpoint telemetry installed, every process launch is also checked against [SigmaHQ](https://github.com/SigmaHQ/sigma)'s macOS process-creation rules, refreshed weekly. Rules that need fields Endpoint Security doesn't give Argus are skipped and listed under Sources & feeds.
 
+### Trends and the weekly edition
+
+"Is it getting better?" on the Overview shows open high and medium findings at the end of each day for the last 30 days, over the number of security events per day, with a small chart for each area. The 24-hour clock at the top gets a dashed outline for a normal day, the average of the previous week, once there are three days of history.
+
+Every Monday morning (`ARGUS_WEEKLY_DAY`, `ARGUS_DIGEST_HOUR`) Argus writes **The Argus Weekly** to `data/reports/`: a one-page front page with what's new, fixed and still open, the month's trend, set-up problems, first-time programs and Argus's own health. "This week's edition" on the Overview opens the current one at any time, and its button prints it or saves it as a PDF.
+
+### Sigma rules
+
+The Endpoint tab lists every rule, how often it matched, when, and which programs. Mute a noisy rule there. To add your own, save macOS `process_creation` rules as `.yml` files in `$ARGUS_HOME/data/sigma/`; they're picked up within a minute and replace a SigmaHQ rule with the same id. The fields Endpoint Security provides are `Image`, `CommandLine` and `ParentImage`.
+
+### Program dossiers
+
+Click any program, in the network chart, in a finding's evidence or in the Endpoint tables, or type its name into "Find a program" at the top. The dossier pulls together everything Argus holds about it: who signed it, what launched it and what it launched, every destination and how much data went each way, privacy permissions, login items, downloads, Endpoint Security and Sigma events, and the findings that mention it. For an app it covers all the helpers inside the bundle.
+
+### Pipeline health and alerts
+
+A quiet dashboard should mean a quiet Mac, not a stopped collector. Argus checks every input on each report (collectors, unified log, Endpoint Security, the TCC reader, snapshots, Little Snitch, feeds, Sigma, CrowdSec) and shows anything stalled in a strip at the top of every tab, with the usual fix.
+
+New high findings and stopped inputs also raise an alert: a macOS notification by default, plus ntfy, Pushover or a webhook if you configure them in `argus.env`. A finding alerts once, and again only if new evidence shows up. Acknowledged findings stay quiet. Sources & feeds › Alerts has a "Send a test" button.
+
 ## Log throughput
 
 A Mac playing YouTube in Safari writes hundreds of unified-log entries per second. Argus only ships the security slice, which is usually well under one event per second.
@@ -449,6 +469,7 @@ Divide the line count by 600 to get events per second. The dashboard's Throughpu
 | File | Purpose |
 |---|---|
 | `argus-collect.sh` | Exports the unified-log slice and host state (system, user or once) |
+| `argus-notify.sh` | Shows alerts as macOS notifications (run by the `com.argus.notify` LaunchAgent) |
 | `argus-logstream.sh` | Live unified-log to syslog relay, started by `argus.sh stream on` |
 
 **Container image (`image/`)**
@@ -475,6 +496,11 @@ Divide the line count by 600 to get events per second. The dashboard's Throughpu
 | `lib/hostsec-extra2.js` | Flagged domains ↔ programs, Wi-Fi/DNS/VPN, USB and Bluetooth devices, container image scans |
 | `lib/findings.js` | Acknowledgements, 24-hour change tracking, the daily digest |
 | `lib/sigma.js` | Fetches and runs SigmaHQ macOS process-creation rules |
+| `lib/dossier.js` | Program dossiers and program search |
+| `lib/health.js` | Pipeline health checks for every input |
+| `lib/alerts.js` | Alerts: macOS notifications, ntfy, Pushover, webhook |
+| `lib/trends.js` | Hourly event history and daily open-finding counts |
+| `lib/weekly.js` | The Argus Weekly, a printable weekly front page |
 | `lib/vulns.js` | Apple security releases, CISA KEV, app and Homebrew vulnerability matching |
 | `lib/store.js` | SQLite state (`node:sqlite`) |
 | `lib/throughput.js` | Event and byte counters for each input |

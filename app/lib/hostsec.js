@@ -115,6 +115,7 @@ class HostSec {
       this.sigmaBusy = true;
       this.sigma.refresh().catch(e => log.warn(`sigma: ${e.message}`)).finally(() => { this.sigmaBusy = false; });
     }
+    if (!this.sigma.disabled) { try { this.sigma.maybeReload(); } catch (e) { log.warn(`sigma reload: ${e.message}`); } }
     const files = walk(path.join(cfg.inbox, 'es'), (p, n) => n.endsWith('.ndjson')).sort();
     let any = false;
     for (const f of files) {
@@ -293,10 +294,10 @@ class HostSec {
     if (execPath.length) add({ sev: sevOf(execPath), area: 'Endpoint Security', title: `${plural(execPath.length, 'program')} launched from unusual locations`, source: 'eslogger: exec',
       detail: 'Non-Apple binaries started from temp folders, Downloads, /Users/Shared, caches or hidden directories. Unsigned or ad-hoc signed ones are rated high.', evidence: execPath.map(line) });
 
-    const sig = group(byKind('exec').filter(e => e.key.startsWith('sigma:')));
+    const sig = group(byKind('exec').filter(e => e.key.startsWith('sigma:') && !this.sigma.isMuted(e.key.slice(6).split('|')[0])));
     const sigShow = sig.filter(g => g.sev !== 'info');
     if (sigShow.length) add({ sev: sevOf(sigShow), area: 'Endpoint Security', title: `${plural(new Set(sigShow.map(g => g.key.split('|')[0])).size, 'Sigma rule')} matched process launches`, source: 'Sigma rules (SigmaHQ, DRL 1.1) on eslogger exec',
-      detail: 'Community detection rules for macOS. Each line names the rule and the command that matched; open the rule (Endpoint tab) for known false positives. Disable a noisy rule with ARGUS_SIGMA_DISABLE=<rule id>.',
+      detail: 'Community detection rules for macOS. Each line names the rule and the command that matched; open the rule (Endpoint tab) for known false positives. Mute a noisy rule from the Sigma panel on the Endpoint tab.',
       evidence: sigShow.map(line) });
     const btm = group(byKind('btm_launch_item_add').filter(e => e.sev !== 'info'));
     if (btm.length) add({ sev: sevOf(btm), area: 'Persistence', title: `${plural(btm.length, 'new background item')} registered (live)`, source: 'eslogger: btm_launch_item_add',
@@ -426,6 +427,17 @@ class HostSec {
     const byHost = new Map();
     for (const r of rows) { if (!r.host) continue; const h = byHost.get(r.host) || { host: r.host, count: 0, last: 0, agents: new Set() }; h.count++; h.last = Math.max(h.last, r.ts || 0); h.agents.add(r.agent); byHost.set(r.host, h); }
     return { available: true, total: rows.length, recent: rows.slice(-500).reverse(), hosts: [...byHost.values()].map(h => ({ ...h, agents: [...h.agents].join(', ') })).sort((a, b) => b.count - a.count).slice(0, 200) };
+  }
+
+  // Sigma rules with their match counts over the retained Endpoint Security events.
+  sigmaPanel() {
+    const hits = this.store.all(`SELECT substr(key, 7, instr(key, '|') - 7) AS rule, COUNT(*) AS n, MAX(ts) AS last, MIN(ts) AS first,
+        GROUP_CONCAT(DISTINCT substr(key, instr(key, '|') + 1)) AS paths FROM es_events WHERE kind = 'exec' AND key LIKE 'sigma:%' GROUP BY rule`);
+    const by = new Map(hits.map(h => [h.rule, h]));
+    const recent = this.store.all("SELECT ts, sev, summary, data FROM es_events WHERE kind = 'exec' AND key LIKE 'sigma:%' ORDER BY ts DESC LIMIT 60")
+      .map(e => { let d = {}; try { d = JSON.parse(e.data || '{}'); } catch (x) { /* truncated */ } return { ts: e.ts, sev: e.sev, rule: d.rule, title: d.title, path: d.path, parent: d.parent, cmd: d.cmd }; });
+    const rules = this.sigma.list().map(r => { const h = by.get(r.id); return { ...r, hits: h ? h.n : 0, last: h ? h.last : null, paths: h ? String(h.paths || '').split(',').slice(0, 5) : [] }; });
+    return { status: this.sigma.status(), since: this.store.get("SELECT MIN(ts) AS t FROM es_events").t || null, rules, recent };
   }
 
   prune(days) {
