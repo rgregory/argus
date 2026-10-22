@@ -30,6 +30,7 @@
 <li>Reputation checks on the IPs and domains your Mac and your network actually touch, against threat feeds, CrowdSec and OSINT, with newly registered domains from Pi-hole called out.</li>
 <li>Syslog from your routers, NAS boxes and other hosts in the same place, run through CrowdSec's detection scenarios.</li>
 <li>JSON and CSV reports every five minutes, ready to grep, diff or feed into something else.</li>
+<li>Isolation from your Mac. Everything that handles untrusted data runs in its own Linux VM, with read-only access to your logs and one writable folder. See <a href="#how-isolation-reduces-risk">How isolation reduces risk</a>.</li>
 </ul>
 <p>Your logs stay on the Mac. Only the individual IPs and domains being looked up go out, to the providers you've turned on, plus two keyless lookups that are on by default (Shodan InternetDB for IPs, rdap.org for domain age). <a href="../SECURITY.md">SECURITY.md</a> lists every provider, and <a href="#security-hardening">Security hardening</a> covers how to cut them back.</p>
 <h2 id="how-it-fits-together">How it fits together</h2>
@@ -74,6 +75,59 @@ flowchart TB
   style NET fill:transparent,stroke:#8b949e,stroke-dasharray:4 3
   style ARGUS fill:transparent,stroke:#2f81f7,stroke-width:2px
 </pre>
+<h2 id="how-apples-container-runtime-shapes-argus">How Apple's <code>container</code> runtime shapes Argus</h2>
+<p>Argus runs on Apple's own container runtime, not Docker, and that runtime works differently in ways that decide how Argus is built:</p>
+<table class="table table-sm">
+<thead>
+<tr>
+<th>Apple's runtime</th>
+<th>What that means for Argus</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Every container runs in its own lightweight Linux VM. Docker Desktop instead runs all containers inside one shared VM.</td>
+<td>CrowdSec, syslog-ng and the Argus service share one VM (the blue box in the diagram), and that VM is separate from your other containers' VMs. Something that breaks out of the container is still inside Argus's own VM, not your other containers or the Mac.</td>
+</tr>
+<tr>
+<td>The runtime is a launch agent started by <code>container system start</code>, and it reads bind-mounted folders through your account.</td>
+<td>The container sees exactly what your account can read. That's why the inbox lock grants your account access, and why root-only logs can't simply be mounted. They reach Argus through the root collector instead.</td>
+</tr>
+<tr>
+<td>A Linux VM has no way to read macOS's unified log, which is a binary store only Apple's <code>log</code> tool understands.</td>
+<td>The host collector exports a filtered slice of it into the inbox every 5 minutes.</td>
+</tr>
+<tr>
+<td>Each container gets only the host folders you mount into it.</td>
+<td>Argus sees the inbox and three log folders, read-only, plus <code>$ARGUS_HOME/data</code>. Nothing else on the Mac is visible to it.</td>
+</tr>
+<tr>
+<td>Named volumes are managed by the runtime.</td>
+<td>Argus's state, CrowdSec config and CrowdSec data live there. They survive restarts and rebuilds, but they aren't a folder you browse.</td>
+</tr>
+<tr>
+<td>Every container gets its own IP. Containers on the same network can reach each other, and separate networks are isolated from one another.</td>
+<td>Pi-hole and IntelOwl have to share Argus's network for Argus to reach them. The flip side is that anything on that network can reach Argus's ports directly, which is why the dashboard needs a token.</td>
+</tr>
+<tr>
+<td><code>-p</code> forwards traffic from the Mac's loopback address into the container.</td>
+<td>The dashboard and syslog listener are reachable only from the Mac itself, unless you deliberately bind syslog to a LAN address.</td>
+</tr>
+<tr>
+<td>Containers can't reach services on the Mac's <code>127.0.0.1</code> unless you create a localhost DNS domain, and doing that turns off iCloud Private Relay.</td>
+<td><code>./argus.sh host-access</code> sets that up, and you only need it for services published on the Mac's loopback.</td>
+</tr>
+<tr>
+<td>Image builds run in their own builder VM.</td>
+<td>When the Mac's DNS is a local Pi-hole, the builder can fail to look up names. <code>./argus.sh build</code> notices and resets the builder with public DNS.</td>
+</tr>
+<tr>
+<td>It needs Apple silicon and macOS 26.</td>
+<td>So does Argus.</td>
+</tr>
+</tbody>
+</table>
+<p>Argus isn't set up for Docker or Docker Desktop. The image itself is a standard OCI image, but <code>argus.sh</code>, the mounts and the networking all assume Apple's runtime. Apple's <a href="https://github.com/apple/container/blob/main/docs/technical-overview.md">technical overview</a> explains the model in more depth.</p>
 <h2 id="what-the-container-can-and-cant-touch">What the container can and can't touch</h2>
 <table class="table table-sm">
 <thead>
@@ -93,7 +147,7 @@ flowchart TB
 </tr>
 <tr>
 <td>Its own storage</td>
-<td>named volumes <code>argus-state</code>, <code>argus-cs-config</code>, <code>argus-cs-data</code> (inside the VM, not on your file system)</td>
+<td>named volumes <code>argus-state</code>, <code>argus-cs-config</code>, <code>argus-cs-data</code>, managed by the container runtime rather than a folder you browse</td>
 </tr>
 <tr>
 <td>Root file system</td>
@@ -109,6 +163,84 @@ flowchart TB
 </tr>
 </tbody>
 </table>
+<h2 id="how-isolation-reduces-risk">How isolation reduces risk</h2>
+<p>Argus spends all day reading input it can't trust: log lines, syslog from other devices, DNS names people looked up, threat-feed downloads and API responses. If any of that ever triggered a bug in Argus, CrowdSec, syslog-ng or one of their dependencies, the question is how far an attacker could get. Each layer below shrinks that, and each one also leaves something exposed, which is listed too.</p>
+<pre class="mermaid">
+flowchart TB
+  subgraph MAC[&quot;Your Mac&quot;]
+    ROOT[&quot;&lt;b&gt;Root collector&lt;/b&gt;&lt;br/&gt;outside the VM · no network&quot;]
+    RO[(&quot;Inbox and log folders&lt;br/&gt;read-only to Argus&quot;)]
+    subgraph ACCT[&quot;Your account&quot;]
+      subgraph VM[&quot;Argus VM&quot;]
+        subgraph CT[&quot;argus container&quot;]
+          P[&quot;syslog-ng&lt;br/&gt;CrowdSec&lt;br/&gt;Argus service&quot;]
+        end
+      end
+      OTHER[&quot;Other containers&lt;br/&gt;each in its own VM&quot;]
+      DATA[(&quot;$ARGUS_HOME/data&lt;br/&gt;the only writable folder&quot;)]
+    end
+  end
+  ROOT -- &quot;writes&quot; --&gt; RO
+  RO -- &quot;read-only&quot; --&gt; P
+  P -- &quot;reports&quot; --&gt; DATA
+
+  style MAC fill:transparent,stroke:#8b949e
+  style ACCT fill:transparent,stroke:#8b949e,stroke-dasharray:4 3
+  style VM fill:transparent,stroke:#2f81f7,stroke-width:2px
+  style CT fill:transparent,stroke:#2f81f7,stroke-dasharray:4 3
+</pre>
+<table class="table table-sm">
+<thead>
+<tr>
+<th>Layer</th>
+<th>Risk it reduces</th>
+<th>What's still exposed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>The VM boundary.</strong> Argus runs in a Linux VM, not on macOS.</td>
+<td>A successful exploit lands in a Linux VM. It has no way into your apps, your Keychain, your home folder or other processes on the Mac.</td>
+<td>Whatever Argus can already see through its mounts, and the network (both below).</td>
+</tr>
+<tr>
+<td><strong>One VM per container.</strong> Argus doesn't share a VM or a kernel with your other containers.</td>
+<td>A compromised Argus can't reach into Pi-hole or IntelOwl, and a compromised Pi-hole can't reach into Argus.</td>
+<td>Containers on the same network can still connect to each other's open ports.</td>
+</tr>
+<tr>
+<td><strong>The runtime runs as your account.</strong> Apple's runtime is a launch agent, not a root service.</td>
+<td>Even someone who escaped the VM would land as your user, not root.</td>
+<td>Your account's own files.</td>
+</tr>
+<tr>
+<td><strong>Minimal mounts.</strong> Argus gets the inbox and three log folders read-only, and <code>$ARGUS_HOME/data</code> as its only writable folder.</td>
+<td>A compromise can't edit your logs to cover its tracks, and can't write anywhere on the Mac except that one folder.</td>
+<td>It can read everything in those folders: login history, launch items, crash reports, DNS queries.</td>
+</tr>
+<tr>
+<td><strong>A locked-down container.</strong> The root file system is read-only, five Linux capabilities are dropped, and CPU and memory are capped.</td>
+<td>It's hard to plant tools inside the container, <code>./argus.sh restart</code> gives you a fresh one, it can't craft raw network packets, and a runaway process can't starve the Mac.</td>
+<td>The named volumes (Argus state and CrowdSec's config and data) are writable and survive restarts. <code>./argus.sh destroy</code> wipes them.</td>
+</tr>
+<tr>
+<td><strong>A closed front door.</strong> Ports are published on the Mac's loopback only, the dashboard needs a token, and it only answers to localhost.</td>
+<td>Nothing on your LAN can reach the dashboard. Web pages can't read it or trigger actions through your browser. Other accounts and containers need the token.</td>
+<td>The syslog listener has no authentication.</td>
+</tr>
+<tr>
+<td><strong>Detection only.</strong> There's no bouncer and no path into macOS's network stack.</td>
+<td>A poisoned feed or a false positive can't block your traffic or quarantine your files.</td>
+<td>Nothing extra. Argus reports, and you decide what to do.</td>
+</tr>
+<tr>
+<td><strong>A small root footprint.</strong> The only root code is the collector, and it lives outside the VM.</td>
+<td>The collector runs read-only commands, makes no network calls, installs only to a root-only path, and locks the inbox to you.</td>
+<td>It still runs as root, so <a href="../collector/argus-collect.sh">read it</a> before installing.</td>
+</tr>
+</tbody>
+</table>
+<p>The biggest gap is the network. Once compromised, Argus could still reach the internet, which it needs for feeds and lookups, so it could send out whatever it can read. It could also connect to any service your Mac offers on its network interfaces, like any other device on your LAN. Nothing in Argus restricts outbound traffic yet. <a href="#security-hardening">Security hardening</a> covers what you can do about the rest.</p>
 <h2 id="the-host-collector">The host collector</h2>
 <h3 id="why-it-exists">Why it exists</h3>
 <p>macOS keeps its unified log in a binary format that only Apple's own <code>log</code> tool can read, so a Linux container can't open it. Some of the other things worth checking, like SIP and FileVault status, login history, or crash reports only root can read, also need a command run on the Mac itself. So Argus installs two small scheduled jobs on the Mac that gather this and drop it into an inbox folder, and the container reads that folder read-only.</p>
@@ -220,7 +352,7 @@ ls -la /Users/Shared/Argus/inbox                                            # wh
 ./argus.sh up                   # starts Argus
 ./argus.sh open                 # opens the dashboard, signed in
 </code></pre>
-<p><strong><a href="INSTALL.html">docs/INSTALL.md</a></strong> walks through each step, what it installs and how to check it worked, plus Pi-hole, IntelOwl and syslog setup, changing settings, and uninstalling.</p>
+<p><strong><a href="INSTALL.html">docs/INSTALL.md</a></strong> walks through each step, what it installs and how to check it worked, plus Pi-hole, IntelOwl and syslog setup, changing settings, upgrading and uninstalling.</p>
 <h2 id="everyday-commands">Everyday commands</h2>
 <pre><code class="language-bash">./argus.sh open                 # open the dashboard, signed in
 ./argus.sh status | logs | shell
@@ -511,6 +643,7 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 <li><strong>The token passes through a URL once.</strong> <code>./argus.sh open</code> puts it in the address it opens. The server swaps it for a cookie and redirects straight away, but that first address can end up in your browser history, and other accounts on the Mac could see it in the process list for the moment <code>open</code> runs. If that worries you, replace the token as described under <a href="INSTALL.html#changing-settings">Changing settings</a>.</li>
 <li><strong>No token means no lock.</strong> An <code>argus.env</code> from before the token existed has <code>ARGUS_TOKEN</code> blank, and then anything on this Mac can read the dashboard. <code>./argus.sh up</code> warns about this. Run <code>./argus.sh init</code> and <code>./argus.sh restart</code> to fix it.</li>
 <li><strong>Other containers can reach the ports.</strong> The ports are only on loopback from the Mac's side. Inside the container they accept connections on every interface, so other containers on the same Apple <code>container</code> network can reach them at the Argus container's address. The dashboard still needs the token, but the syslog listener has no such protection.</li>
+<li><strong>Outbound traffic isn't restricted.</strong> The container needs the internet for feeds and lookups, so a compromised Argus could send out whatever it can read. It can also reach services your Mac offers on its network interfaces.</li>
 <li><strong>Syslog can be spoofed.</strong> Even on loopback, any process on the Mac can send fake syslog lines to the listener.</li>
 <li><strong>Base images and dashboard libraries float</strong> until you pin them as described above.</li>
 <li><strong>The collector depends on <code>/bin/bash</code>.</strong> It runs under the bash 3.2 that macOS still ships. Apple made zsh the default shell years ago, so if a future macOS drops bash, the collector will stop until it's ported. <code>./argus.sh status</code> will show it as not running.</li>
@@ -537,15 +670,23 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 </tr>
 <tr>
 <td><code>SECURITY.md</code></td>
-<td>Trust model, data flows, secrets, supply chain</td>
+<td>Trust model, data flows, secrets, supply chain, reporting a vulnerability</td>
+</tr>
+<tr>
+<td><code>CHANGELOG.md</code></td>
+<td>What changed in each release</td>
 </tr>
 <tr>
 <td><code>sbom.json</code></td>
 <td>CycloneDX software bill of materials</td>
 </tr>
 <tr>
+<td><code>.github/</code></td>
+<td>CI: syntax checks, ShellCheck and a smoke test of the dashboard's access rules</td>
+</tr>
+<tr>
 <td><code>docs/</code></td>
-<td><code>INSTALL.md</code> (full install guide), <code>sbom.md</code> (a readable SBOM), and HTML copies of this README and the install guide</td>
+<td><code>INSTALL.md</code> (install, upgrade and uninstall guide), <code>sbom.md</code> (a readable SBOM), and HTML copies of this README and the install guide</td>
 </tr>
 </tbody>
 </table>
@@ -648,7 +789,7 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 </table>
 <h2 id="references">References</h2>
 <ul>
-<li>Apple <code>container</code>: <a href="https://github.com/apple/container/blob/main/docs/command-reference.md">command reference</a>, <a href="https://github.com/apple/container/blob/main/docs/networking.md">networking</a>, <a href="https://github.com/apple/container/blob/main/docs/volumes.md">volumes</a>, <a href="https://github.com/apple/container/blob/main/docs/host-integration.md">host integration</a></li>
+<li>Apple <code>container</code>: <a href="https://github.com/apple/container/blob/main/docs/technical-overview.md">technical overview</a>, <a href="https://github.com/apple/container/blob/main/docs/command-reference.md">command reference</a>, <a href="https://github.com/apple/container/blob/main/docs/networking.md">networking</a>, <a href="https://github.com/apple/container/blob/main/docs/volumes.md">volumes</a>, <a href="https://github.com/apple/container/blob/main/docs/host-integration.md">host integration</a></li>
 <li><a href="https://hub.docker.com/r/crowdsecurity/crowdsec">CrowdSec Docker image</a></li>
 <li><a href="https://github.com/pi-hole/FTL/tree/master/src/api/docs/content/specs">Pi-hole FTL API spec</a></li>
 <li><a href="https://pypi.org/project/pyintelowl/">pyintelowl (IntelOwl API)</a></li>

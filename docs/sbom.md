@@ -3,7 +3,7 @@
 Machine-readable version: [`sbom.json`](../sbom.json) (CycloneDX 1.6). This file is a readable summary of the same data — regenerate both together; see `sbom.json`'s `cdx:argus:note` property for how.
 
 **Generated:** 2026-10-18T20:19:53Z  
-**Component:** argus 1.0.0  
+**Component:** argus 1.1.0  
 **Total components:** 79
 
 ## Container base images

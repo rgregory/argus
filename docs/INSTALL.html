@@ -20,7 +20,7 @@
 <p>This covers everything from a fresh Mac to a running dashboard, the optional integrations, and how to remove Argus again. For what Argus is and how it works, see the <a href="README.html">README</a>.</p>
 <h2 id="what-you-need">What you need</h2>
 <ul>
-<li>A Mac with Apple silicon running macOS 26. Apple's <code>container</code> runtime doesn't support Intel Macs or older versions of macOS.</li>
+<li>A Mac with Apple silicon running macOS 26. Apple's <code>container</code> runtime doesn't support Intel Macs or older versions of macOS. The README explains <a href="README.html#how-apples-container-runtime-shapes-argus">how Apple's runtime shapes Argus</a> if you're used to Docker.</li>
 <li>Apple's <code>container</code> CLI. Install the signed package from its <a href="https://github.com/apple/container/releases">releases page</a>, then run <code>container system start</code> once. <code>container system status</code> should report that it's running.</li>
 <li>An admin account. Installing the host collector uses <code>sudo</code>.</li>
 </ul>
@@ -100,6 +100,17 @@ cd argus
 </tbody>
 </table>
 <p>Two of these are settings: move the inbox with <code>ARGUS_INBOX</code> in <code>argus.env</code>, and <code>~/.argus</code> with <code>ARGUS_HOME</code> as described above. The collector script and log paths are fixed.</p>
+<h2 id="upgrading">Upgrading</h2>
+<pre><code class="language-bash">cd argus                         # your clone of the repo
+git pull
+git diff HEAD@{1} -- collector/  # read what changed in the part that runs as root
+./argus.sh init                  # adds new keys (like the 1.1.0 access token); Enter keeps your credentials
+./argus.sh build                 # the server and dashboard live in the image, so rebuild
+./argus.sh install-collector     # git pull doesn't update the copy root runs
+./argus.sh restart
+./argus.sh open
+</code></pre>
+<p>Your config, reports, indicators and CrowdSec state all carry over. <code>init</code> never overwrites a value you've set, and settings added in a newer <code>argus.env.example</code> use their defaults until you copy them into your own <code>argus.env</code>. If you skip <code>install-collector</code>, <code>./argus.sh status</code> reminds you that the installed collector is out of date. <a href="../CHANGELOG.md">CHANGELOG.md</a> lists what changed in each release.</p>
 <h2 id="uninstalling">Uninstalling</h2>
 <pre><code class="language-bash">./argus.sh stream off            # only if you turned on live streaming
 ./argus.sh uninstall-collector   # removes the LaunchDaemon, LaunchAgent and collector script

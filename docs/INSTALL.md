@@ -4,7 +4,7 @@ This covers everything from a fresh Mac to a running dashboard, the optional int
 
 ## What you need
 
-- A Mac with Apple silicon running macOS 26. Apple's `container` runtime doesn't support Intel Macs or older versions of macOS.
+- A Mac with Apple silicon running macOS 26. Apple's `container` runtime doesn't support Intel Macs or older versions of macOS. The README explains [how Apple's runtime shapes Argus](../README.md#how-apples-container-runtime-shapes-argus) if you're used to Docker.
 - Apple's `container` CLI. Install the signed package from its [releases page](https://github.com/apple/container/releases), then run `container system start` once. `container system status` should report that it's running.
 - An admin account. Installing the host collector uses `sudo`.
 
@@ -92,6 +92,21 @@ To replace the dashboard token, clear `ARGUS_TOKEN` in `argus.env`, run `./argus
 | Argus and CrowdSec state | container volumes `argus-state`, `argus-cs-config`, `argus-cs-data` |
 
 Two of these are settings: move the inbox with `ARGUS_INBOX` in `argus.env`, and `~/.argus` with `ARGUS_HOME` as described above. The collector script and log paths are fixed.
+
+## Upgrading
+
+```bash
+cd argus                         # your clone of the repo
+git pull
+git diff HEAD@{1} -- collector/  # read what changed in the part that runs as root
+./argus.sh init                  # adds new keys (like the 1.1.0 access token); Enter keeps your credentials
+./argus.sh build                 # the server and dashboard live in the image, so rebuild
+./argus.sh install-collector     # git pull doesn't update the copy root runs
+./argus.sh restart
+./argus.sh open
+```
+
+Your config, reports, indicators and CrowdSec state all carry over. `init` never overwrites a value you've set, and settings added in a newer `argus.env.example` use their defaults until you copy them into your own `argus.env`. If you skip `install-collector`, `./argus.sh status` reminds you that the installed collector is out of date. [CHANGELOG.md](../CHANGELOG.md) lists what changed in each release.
 
 ## Uninstalling
 

@@ -152,6 +152,8 @@ write_meta() {
 lock_inbox() {
   [ -n "${ARGUS_USER:-}" ] || return 0   # never lock without knowing who to let in
   chmod 0700 "$INBOX"
+  # ls -le is the only stock way to read a folder's ACL; this greps ACL lines, not file names
+  # shellcheck disable=SC2010
   if ! ls -led "$INBOX" 2>/dev/null | grep -q " user:$ARGUS_USER allow "; then
     chmod -N "$INBOX" 2>/dev/null
     chmod +a "user:$ARGUS_USER allow list,search,readattr,readextattr,readsecurity" "$INBOX" &&

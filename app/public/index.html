@@ -635,6 +635,7 @@ function argus() {
       this.loading = true;
       try {
         const res = await fetch('/api/report' + (fresh ? '?fresh=1' : ''));
+        if (res.status === 401) throw new Error('you are not signed in, or your sign-in has expired. Run ./argus.sh open on this Mac.');
         if (!res.ok) throw new Error('HTTP ' + res.status);
         this.r = Object.freeze(await res.json());
         this.error = '';

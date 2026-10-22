@@ -19,11 +19,13 @@ installed, so its decisions never reach the Mac's actual network stack.
 
 ## Trust boundaries and host access
 
+The README's [How isolation reduces risk](README.md#how-isolation-reduces-risk) walks through each layer, what it protects against, and what it leaves exposed.
+
 | Access | Scope |
 |---|---|
 | Read-only | the collector's inbox (a root-owned folder only root and your account can open), `/private/var/log`, `/Library/Logs`, `~/Library/Logs` (the last three only if `ARGUS_MOUNT_HOST_LOGS=1`) |
 | Read-write on the host | `$ARGUS_HOME/data` only — reports, CSV exports, and optionally `$ARGUS_HOME/data/config/feeds.json` |
-| Container-internal storage | named volumes `argus-state`, `argus-cs-config`, `argus-cs-data` — live inside the Apple `container` VM, not on your Mac's file system directly |
+| Container-internal storage | named volumes `argus-state`, `argus-cs-config`, `argus-cs-data`, managed by Apple's `container` runtime rather than a folder on your Mac you'd browse |
 | Root file system | read-only by default (`ARGUS_READONLY_ROOT=1`); `/tmp`, `/run`, `/var/log` are tmpfs |
 | Inbound network | the dashboard (`127.0.0.1:7080` by default, access token required) and the syslog listener (`127.0.0.1` unless you deliberately bind it to a LAN address) |
 | Dropped capabilities | `NET_RAW`, `MKNOD`, `SYS_CHROOT`, `AUDIT_WRITE`, `SETFCAP` |
@@ -132,11 +134,13 @@ settings without touching your admin login.
 
 ## Reporting a problem
 
-This is a personal/self-hosted project, not a maintained product with an SLA.
-If you find a security issue, open an issue in this repository (or, if it's
-sensitive enough that you don't want it public immediately, say so in the
-issue title and a maintainer will follow up privately) rather than a pull
-request that demonstrates it live.
+Please report security issues privately. On GitHub, open this repository's
+**Security** tab and choose **Report a vulnerability**. Don't open a public
+issue, and don't send a pull request that demonstrates the problem, since
+either one publishes it before there's a fix.
+
+This is a personal, self-hosted project, not a product with an SLA, but
+reports are read and answered.
 
 ## Known security-relevant limits
 
