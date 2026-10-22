@@ -3,7 +3,7 @@
 Machine-readable version: [`sbom.json`](../sbom.json) (CycloneDX 1.6). This file is a readable summary of the same data — regenerate both together; see `sbom.json`'s `cdx:argus:note` property for how.
 
 **Generated:** 2026-10-18T20:19:53Z  
-**Component:** argus 1.2.0  
+**Component:** argus 1.3.0  
 **Total components:** 79
 
 ## Container base images
@@ -39,7 +39,7 @@ Machine-readable version: [`sbom.json`](../sbom.json) (CycloneDX 1.6). This file
 
 ## npm dependency tree (`app/package-lock.json`) — 65 packages
 
-Only `express` is a direct dependency in `app/package.json`; everything else is pulled in transitively. Full detail (hashes, exact resolved URLs) is in `sbom.json`.
+`express` and `yaml` are the direct dependencies in `app/package.json`; everything else is pulled in transitively. Full detail (hashes, exact resolved URLs) is in `sbom.json`.
 
 | Package | Version |
 |---|---|
@@ -63,6 +63,7 @@ Only `express` is a direct dependency in `app/package.json`; everything else is 
 | escape-html | 1.0.3 |
 | etag | 1.8.1 |
 | express **(direct)** | 5.3.0 |
+| yaml **(direct)** | 2.9.1 |
 | finalhandler | 2.1.1 |
 | forwarded | 0.2.0 |
 | fresh | 2.0.0 |

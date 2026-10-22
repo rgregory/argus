@@ -10,6 +10,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const engine = require('./engine');
 const { cfg, logger, walk } = require('./util');
+const { Sigma } = require('./sigma');
 
 const log = logger('hostsec');
 const H = 3600e3, D = 86400e3;
@@ -75,6 +76,7 @@ class HostSec {
     store.db.exec(SCHEMA);
     this.mtimes = new Map(); this.cache = new Map();
     this.lastFile = null; this.lastFileAt = null; this.error = '';
+    this.sigma = new Sigma(); this.sigmaBusy = false;
     if (!store.kvGet('es.since')) { /* set when the first chunk arrives */ }
   }
 
@@ -93,6 +95,10 @@ class HostSec {
 
   // ------------------------------------------------------------- ES ingest
   cycle() {
+    if (!this.sigmaBusy && !this.sigma.disabled) {
+      this.sigmaBusy = true;
+      this.sigma.refresh().catch(e => log.warn(`sigma: ${e.message}`)).finally(() => { this.sigmaBusy = false; });
+    }
     const files = walk(path.join(cfg.inbox, 'es'), (p, n) => n.endsWith('.ndjson')).sort();
     let any = false;
     for (const f of files) {
@@ -152,6 +158,12 @@ class HostSec {
         x.count++; x.last = Math.max(x.last, ts); x.first = Math.min(x.first, ts);
         x.parent = proc.path || ''; x.args = cmd; x.euid = t.euid;
         if (OWN.test(cmd) || OWN.test(proc.path || '')) return;
+        if (this.sigma.rules.length) {
+          for (const r of this.sigma.match({ Image: t.path, CommandLine: cmd, ParentImage: proc.path || '' })) {
+            const sev = r.level === 'critical' || r.level === 'high' ? 'high' : r.level === 'medium' ? 'medium' : r.level === 'low' ? 'low' : 'info';
+            push(sev, 'sigma:' + r.id + '|' + t.path, `${r.title} [${r.level}]: ${cmd}`, { rule: r.id, title: r.title, level: r.level, author: r.author, link: r.link, tags: r.tags, path: t.path, parent: proc.path, cmd });
+          }
+        }
         // notable single executions are kept individually
         for (const [rx, label, sev] of RISKY_ARGS) {
           if (rx.test(cmd)) { push(sev, 'args:' + label + '|' + t.path, `${label}: ${cmd}`, { path: t.path, parent: proc.path, cmd, team: t.team, euid: t.euid }); break; }
@@ -265,6 +277,11 @@ class HostSec {
     if (execPath.length) add({ sev: sevOf(execPath), area: 'Endpoint Security', title: `${plural(execPath.length, 'program')} launched from unusual locations`, source: 'eslogger: exec',
       detail: 'Non-Apple binaries started from temp folders, Downloads, /Users/Shared, caches or hidden directories. Unsigned or ad-hoc signed ones are rated high.', evidence: execPath.map(line) });
 
+    const sig = group(byKind('exec').filter(e => e.key.startsWith('sigma:')));
+    const sigShow = sig.filter(g => g.sev !== 'info');
+    if (sigShow.length) add({ sev: sevOf(sigShow), area: 'Endpoint Security', title: `${plural(new Set(sigShow.map(g => g.key.split('|')[0])).size, 'Sigma rule')} matched process launches`, source: 'Sigma rules (SigmaHQ, DRL 1.1) on eslogger exec',
+      detail: 'Community detection rules for macOS. Each line names the rule and the command that matched; open the rule (Endpoint tab) for known false positives. Disable a noisy rule with ARGUS_SIGMA_DISABLE=<rule id>.',
+      evidence: sigShow.map(line) });
     const btm = group(byKind('btm_launch_item_add').filter(e => e.sev !== 'info'));
     if (btm.length) add({ sev: sevOf(btm), area: 'Persistence', title: `${plural(btm.length, 'new background item')} registered (live)`, source: 'eslogger: btm_launch_item_add',
       detail: 'Something registered a login item, launch agent or daemon. This is the moment persistence is created — check the instigator.', evidence: btm.map(line) });
@@ -408,6 +425,7 @@ class HostSec {
   status() {
     const r = this.store.get('SELECT COUNT(*) AS files, SUM(events) AS events, MAX(done_at) AS last FROM es_files');
     return { esSince: this.store.kvGet('es.since', null), esFiles: r.files || 0, esEvents: r.events || 0, lastFileAt: this.lastFileAt || r.last || null,
+      sigma: this.sigma.status(),
       tccDb: { system: this.mtimeOf('snapshots/tcc-system.tsv'), user: this.mtimeOf('snapshots/tcc-user.tsv') },
       quarantine: this.mtimeOf('user/quarantine.tsv'), inventory: this.mtimeOf('user/apps.json') };
   }

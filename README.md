@@ -319,7 +319,13 @@ Supported formats are `plain` (IPs, CIDRs or domains, one per line), `wildcard` 
 | Posture | SIP, Gatekeeper, FileVault, firewall and stealth mode, Remote Login, automatic updates, automatic login, guest account, sharing services, how old XProtect is, Time Machine backup age, Wi-Fi security, DNS resolvers and VPN. The dashboard lists failing checks and tucks passing ones behind a link |
 | System | crash and panic reports, memory-pressure kills, processes logging lots of faults, sleep and wake, install history, Apple container log errors, and whether the Ollama API is exposed |
 
-Every five minutes Argus writes reports to `$ARGUS_HOME/data/reports/`: `latest.json`, `findings.csv`, `indicators.csv`, and one JSON file per day.
+Every five minutes Argus writes reports to `$ARGUS_HOME/data/reports/`: `latest.json`, `findings.csv`, `indicators.csv`, and one JSON file per day. Each morning it also writes `digest-YYYYMMDD.html`, a one-page summary of what's new, changed and resolved.
+
+### Working through findings
+
+Open a finding to see its evidence. If it's expected, acknowledge it, with a note if you like: it leaves the counts and lists until something new shows up in its evidence, then returns marked "changed since acknowledged". Repeats of the same thing (a later timestamp, a higher repeat count) don't bring it back. The Overview's "Changed in the last 24 hours" card lists new, changed and resolved findings, and links to the day's digest.
+
+With endpoint telemetry installed, every process launch is also checked against [SigmaHQ](https://github.com/SigmaHQ/sigma)'s macOS process-creation rules, refreshed weekly. Rules that need fields Endpoint Security doesn't give Argus are skipped and listed under Sources & feeds.
 
 ## Log throughput
 
@@ -467,6 +473,8 @@ Divide the line count by 600 to get events per second. The dashboard's Throughpu
 | `lib/hostsec.js` | Endpoint Security, TCC database, background-item changes, downloads |
 | `lib/hostsec-extra.js` | Program ↔ network, Little Snitch, file integrity, browser extensions, certificates |
 | `lib/hostsec-extra2.js` | Flagged domains ↔ programs, Wi-Fi/DNS/VPN, USB and Bluetooth devices, container image scans |
+| `lib/findings.js` | Acknowledgements, 24-hour change tracking, the daily digest |
+| `lib/sigma.js` | Fetches and runs SigmaHQ macOS process-creation rules |
 | `lib/vulns.js` | Apple security releases, CISA KEV, app and Homebrew vulnerability matching |
 | `lib/store.js` | SQLite state (`node:sqlite`) |
 | `lib/throughput.js` | Event and byte counters for each input |

@@ -3,9 +3,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
   "version": 1,
-  "serialNumber": "urn:uuid:d27e5b6b-f39b-4749-a089-28218964a32a",
+  "serialNumber": "urn:uuid:d362e1f1-12b6-4963-b4a3-69f5ed0116d9",
   "metadata": {
-    "timestamp": "2026-10-22T00:45:00Z",
+    "timestamp": "2026-10-22T01:20:00Z",
     "tools": {
       "components": [
         {
@@ -98,10 +98,10 @@
     "component": {
       "type": "application",
       "name": "argus",
-      "version": "1.2.0",
-      "bom-ref": "argus@1.2.0",
+      "version": "1.3.0",
+      "bom-ref": "argus@1.3.0",
       "description": "macOS log + syslog analysis with CrowdSec, threat feeds and OSINT enrichment",
-      "purl": "pkg:npm/argus@1.2.0",
+      "purl": "pkg:npm/argus@1.3.0",
       "properties": [
         {
           "name": "cdx:npm:package:constraint:engine:node",
@@ -129,7 +129,7 @@
       "type": "library",
       "name": "express",
       "version": "5.3.0",
-      "bom-ref": "argus@1.2.0|express@5.3.0",
+      "bom-ref": "argus@1.3.0|express@5.3.0",
       "licenses": [
         {
           "license": {
@@ -163,7 +163,7 @@
       "type": "library",
       "name": "accepts",
       "version": "2.0.0",
-      "bom-ref": "argus@1.2.0|accepts@2.0.0",
+      "bom-ref": "argus@1.3.0|accepts@2.0.0",
       "licenses": [
         {
           "license": {
@@ -197,7 +197,7 @@
       "type": "library",
       "name": "body-parser",
       "version": "2.3.0",
-      "bom-ref": "argus@1.2.0|body-parser@2.3.0",
+      "bom-ref": "argus@1.3.0|body-parser@2.3.0",
       "licenses": [
         {
           "license": {
@@ -231,7 +231,7 @@
       "type": "library",
       "name": "content-disposition",
       "version": "2.0.1",
-      "bom-ref": "argus@1.2.0|content-disposition@2.0.1",
+      "bom-ref": "argus@1.3.0|content-disposition@2.0.1",
       "licenses": [
         {
           "license": {
@@ -265,7 +265,7 @@
       "type": "library",
       "name": "content-type",
       "version": "2.1.0",
-      "bom-ref": "argus@1.2.0|content-type@2.1.0",
+      "bom-ref": "argus@1.3.0|content-type@2.1.0",
       "licenses": [
         {
           "license": {
@@ -299,7 +299,7 @@
       "type": "library",
       "name": "cookie-signature",
       "version": "1.2.2",
-      "bom-ref": "argus@1.2.0|cookie-signature@1.2.2",
+      "bom-ref": "argus@1.3.0|cookie-signature@1.2.2",
       "licenses": [
         {
           "license": {
@@ -333,7 +333,7 @@
       "type": "library",
       "name": "cookie",
       "version": "0.7.2",
-      "bom-ref": "argus@1.2.0|cookie@0.7.2",
+      "bom-ref": "argus@1.3.0|cookie@0.7.2",
       "licenses": [
         {
           "license": {
@@ -367,7 +367,7 @@
       "type": "library",
       "name": "debug",
       "version": "4.4.3",
-      "bom-ref": "argus@1.2.0|debug@4.4.3",
+      "bom-ref": "argus@1.3.0|debug@4.4.3",
       "licenses": [
         {
           "license": {
@@ -401,7 +401,7 @@
       "type": "library",
       "name": "depd",
       "version": "2.0.0",
-      "bom-ref": "argus@1.2.0|depd@2.0.0",
+      "bom-ref": "argus@1.3.0|depd@2.0.0",
       "licenses": [
         {
           "license": {
@@ -435,7 +435,7 @@
       "type": "library",
       "name": "encodeurl",
       "version": "2.0.0",
-      "bom-ref": "argus@1.2.0|encodeurl@2.0.0",
+      "bom-ref": "argus@1.3.0|encodeurl@2.0.0",
       "licenses": [
         {
           "license": {
@@ -469,7 +469,7 @@
       "type": "library",
       "name": "escape-html",
       "version": "1.0.3",
-      "bom-ref": "argus@1.2.0|escape-html@1.0.3",
+      "bom-ref": "argus@1.3.0|escape-html@1.0.3",
       "licenses": [
         {
           "license": {
@@ -503,7 +503,7 @@
       "type": "library",
       "name": "etag",
       "version": "1.8.1",
-      "bom-ref": "argus@1.2.0|etag@1.8.1",
+      "bom-ref": "argus@1.3.0|etag@1.8.1",
       "licenses": [
         {
           "license": {
@@ -537,7 +537,7 @@
       "type": "library",
       "name": "finalhandler",
       "version": "2.1.1",
-      "bom-ref": "argus@1.2.0|finalhandler@2.1.1",
+      "bom-ref": "argus@1.3.0|finalhandler@2.1.1",
       "licenses": [
         {
           "license": {
@@ -571,7 +571,7 @@
       "type": "library",
       "name": "fresh",
       "version": "2.0.0",
-      "bom-ref": "argus@1.2.0|fresh@2.0.0",
+      "bom-ref": "argus@1.3.0|fresh@2.0.0",
       "licenses": [
         {
           "license": {
@@ -605,7 +605,7 @@
       "type": "library",
       "name": "http-errors",
       "version": "2.0.1",
-      "bom-ref": "argus@1.2.0|http-errors@2.0.1",
+      "bom-ref": "argus@1.3.0|http-errors@2.0.1",
       "licenses": [
         {
           "license": {
@@ -639,7 +639,7 @@
       "type": "library",
       "name": "merge-descriptors",
       "version": "2.0.0",
-      "bom-ref": "argus@1.2.0|merge-descriptors@2.0.0",
+      "bom-ref": "argus@1.3.0|merge-descriptors@2.0.0",
       "licenses": [
         {
           "license": {
@@ -673,7 +673,7 @@
       "type": "library",
       "name": "mime-types",
       "version": "3.0.2",
-      "bom-ref": "argus@1.2.0|mime-types@3.0.2",
+      "bom-ref": "argus@1.3.0|mime-types@3.0.2",
       "licenses": [
         {
           "license": {
@@ -707,7 +707,7 @@
       "type": "library",
       "name": "on-finished",
       "version": "2.4.1",
-      "bom-ref": "argus@1.2.0|on-finished@2.4.1",
+      "bom-ref": "argus@1.3.0|on-finished@2.4.1",
       "licenses": [
         {
           "license": {
@@ -741,7 +741,7 @@
       "type": "library",
       "name": "once",
       "version": "1.4.0",
-      "bom-ref": "argus@1.2.0|once@1.4.0",
+      "bom-ref": "argus@1.3.0|once@1.4.0",
       "licenses": [
         {
           "license": {
@@ -775,7 +775,7 @@
       "type": "library",
       "name": "parseurl",
       "version": "1.3.3",
-      "bom-ref": "argus@1.2.0|parseurl@1.3.3",
+      "bom-ref": "argus@1.3.0|parseurl@1.3.3",
       "licenses": [
         {
           "license": {
@@ -809,7 +809,7 @@
       "type": "library",
       "name": "proxy-addr",
       "version": "2.0.8",
-      "bom-ref": "argus@1.2.0|proxy-addr@2.0.8",
+      "bom-ref": "argus@1.3.0|proxy-addr@2.0.8",
       "licenses": [
         {
           "license": {
@@ -843,7 +843,7 @@
       "type": "library",
       "name": "qs",
       "version": "6.16.1",
-      "bom-ref": "argus@1.2.0|qs@6.16.1",
+      "bom-ref": "argus@1.3.0|qs@6.16.1",
       "licenses": [
         {
           "license": {
@@ -877,7 +877,7 @@
       "type": "library",
       "name": "range-parser",
       "version": "1.3.0",
-      "bom-ref": "argus@1.2.0|range-parser@1.3.0",
+      "bom-ref": "argus@1.3.0|range-parser@1.3.0",
       "licenses": [
         {
           "license": {
@@ -911,7 +911,7 @@
       "type": "library",
       "name": "router",
       "version": "2.2.0",
-      "bom-ref": "argus@1.2.0|router@2.2.0",
+      "bom-ref": "argus@1.3.0|router@2.2.0",
       "licenses": [
         {
           "license": {
@@ -945,7 +945,7 @@
       "type": "library",
       "name": "send",
       "version": "1.2.1",
-      "bom-ref": "argus@1.2.0|send@1.2.1",
+      "bom-ref": "argus@1.3.0|send@1.2.1",
       "licenses": [
         {
           "license": {
@@ -979,7 +979,7 @@
       "type": "library",
       "name": "serve-static",
       "version": "2.2.1",
-      "bom-ref": "argus@1.2.0|serve-static@2.2.1",
+      "bom-ref": "argus@1.3.0|serve-static@2.2.1",
       "licenses": [
         {
           "license": {
@@ -1013,7 +1013,7 @@
       "type": "library",
       "name": "statuses",
       "version": "2.0.2",
-      "bom-ref": "argus@1.2.0|statuses@2.0.2",
+      "bom-ref": "argus@1.3.0|statuses@2.0.2",
       "licenses": [
         {
           "license": {
@@ -1047,7 +1047,7 @@
       "type": "library",
       "name": "type-is",
       "version": "2.1.0",
-      "bom-ref": "argus@1.2.0|type-is@2.1.0",
+      "bom-ref": "argus@1.3.0|type-is@2.1.0",
       "licenses": [
         {
           "license": {
@@ -1081,7 +1081,7 @@
       "type": "library",
       "name": "vary",
       "version": "1.1.2",
-      "bom-ref": "argus@1.2.0|vary@1.1.2",
+      "bom-ref": "argus@1.3.0|vary@1.1.2",
       "licenses": [
         {
           "license": {
@@ -1115,7 +1115,7 @@
       "type": "library",
       "name": "negotiator",
       "version": "1.1.0",
-      "bom-ref": "argus@1.2.0|negotiator@1.1.0",
+      "bom-ref": "argus@1.3.0|negotiator@1.1.0",
       "licenses": [
         {
           "license": {
@@ -1149,7 +1149,7 @@
       "type": "library",
       "name": "bytes",
       "version": "3.1.2",
-      "bom-ref": "argus@1.2.0|bytes@3.1.2",
+      "bom-ref": "argus@1.3.0|bytes@3.1.2",
       "licenses": [
         {
           "license": {
@@ -1183,7 +1183,7 @@
       "type": "library",
       "name": "iconv-lite",
       "version": "0.7.3",
-      "bom-ref": "argus@1.2.0|iconv-lite@0.7.3",
+      "bom-ref": "argus@1.3.0|iconv-lite@0.7.3",
       "licenses": [
         {
           "license": {
@@ -1217,7 +1217,7 @@
       "type": "library",
       "name": "raw-body",
       "version": "3.0.2",
-      "bom-ref": "argus@1.2.0|raw-body@3.0.2",
+      "bom-ref": "argus@1.3.0|raw-body@3.0.2",
       "licenses": [
         {
           "license": {
@@ -1251,7 +1251,7 @@
       "type": "library",
       "name": "ms",
       "version": "2.1.3",
-      "bom-ref": "argus@1.2.0|ms@2.1.3",
+      "bom-ref": "argus@1.3.0|ms@2.1.3",
       "licenses": [
         {
           "license": {
@@ -1285,7 +1285,7 @@
       "type": "library",
       "name": "inherits",
       "version": "2.0.4",
-      "bom-ref": "argus@1.2.0|inherits@2.0.4",
+      "bom-ref": "argus@1.3.0|inherits@2.0.4",
       "licenses": [
         {
           "license": {
@@ -1319,7 +1319,7 @@
       "type": "library",
       "name": "setprototypeof",
       "version": "1.2.0",
-      "bom-ref": "argus@1.2.0|setprototypeof@1.2.0",
+      "bom-ref": "argus@1.3.0|setprototypeof@1.2.0",
       "licenses": [
         {
           "license": {
@@ -1353,7 +1353,7 @@
       "type": "library",
       "name": "toidentifier",
       "version": "1.0.1",
-      "bom-ref": "argus@1.2.0|toidentifier@1.0.1",
+      "bom-ref": "argus@1.3.0|toidentifier@1.0.1",
       "licenses": [
         {
           "license": {
@@ -1387,7 +1387,7 @@
       "type": "library",
       "name": "mime-db",
       "version": "1.54.0",
-      "bom-ref": "argus@1.2.0|mime-db@1.54.0",
+      "bom-ref": "argus@1.3.0|mime-db@1.54.0",
       "licenses": [
         {
           "license": {
@@ -1421,7 +1421,7 @@
       "type": "library",
       "name": "ee-first",
       "version": "1.1.1",
-      "bom-ref": "argus@1.2.0|ee-first@1.1.1",
+      "bom-ref": "argus@1.3.0|ee-first@1.1.1",
       "licenses": [
         {
           "license": {
@@ -1455,7 +1455,7 @@
       "type": "library",
       "name": "wrappy",
       "version": "1.0.2",
-      "bom-ref": "argus@1.2.0|wrappy@1.0.2",
+      "bom-ref": "argus@1.3.0|wrappy@1.0.2",
       "licenses": [
         {
           "license": {
@@ -1489,7 +1489,7 @@
       "type": "library",
       "name": "forwarded",
       "version": "0.2.0",
-      "bom-ref": "argus@1.2.0|forwarded@0.2.0",
+      "bom-ref": "argus@1.3.0|forwarded@0.2.0",
       "licenses": [
         {
           "license": {
@@ -1523,7 +1523,7 @@
       "type": "library",
       "name": "ipaddr.js",
       "version": "1.9.1",
-      "bom-ref": "argus@1.2.0|ipaddr.js@1.9.1",
+      "bom-ref": "argus@1.3.0|ipaddr.js@1.9.1",
       "licenses": [
         {
           "license": {
@@ -1557,7 +1557,7 @@
       "type": "library",
       "name": "es-define-property",
       "version": "1.0.1",
-      "bom-ref": "argus@1.2.0|es-define-property@1.0.1",
+      "bom-ref": "argus@1.3.0|es-define-property@1.0.1",
       "licenses": [
         {
           "license": {
@@ -1591,7 +1591,7 @@
       "type": "library",
       "name": "side-channel",
       "version": "1.1.1",
-      "bom-ref": "argus@1.2.0|side-channel@1.1.1",
+      "bom-ref": "argus@1.3.0|side-channel@1.1.1",
       "licenses": [
         {
           "license": {
@@ -1625,7 +1625,7 @@
       "type": "library",
       "name": "is-promise",
       "version": "4.0.0",
-      "bom-ref": "argus@1.2.0|is-promise@4.0.0",
+      "bom-ref": "argus@1.3.0|is-promise@4.0.0",
       "licenses": [
         {
           "license": {
@@ -1659,7 +1659,7 @@
       "type": "library",
       "name": "path-to-regexp",
       "version": "8.4.2",
-      "bom-ref": "argus@1.2.0|path-to-regexp@8.4.2",
+      "bom-ref": "argus@1.3.0|path-to-regexp@8.4.2",
       "licenses": [
         {
           "license": {
@@ -1693,7 +1693,7 @@
       "type": "library",
       "name": "media-typer",
       "version": "1.1.1",
-      "bom-ref": "argus@1.2.0|media-typer@1.1.1",
+      "bom-ref": "argus@1.3.0|media-typer@1.1.1",
       "licenses": [
         {
           "license": {
@@ -1727,7 +1727,7 @@
       "type": "library",
       "name": "safer-buffer",
       "version": "2.1.2",
-      "bom-ref": "argus@1.2.0|safer-buffer@2.1.2",
+      "bom-ref": "argus@1.3.0|safer-buffer@2.1.2",
       "licenses": [
         {
           "license": {
@@ -1761,7 +1761,7 @@
       "type": "library",
       "name": "unpipe",
       "version": "1.0.0",
-      "bom-ref": "argus@1.2.0|unpipe@1.0.0",
+      "bom-ref": "argus@1.3.0|unpipe@1.0.0",
       "licenses": [
         {
           "license": {
@@ -1795,7 +1795,7 @@
       "type": "library",
       "name": "es-errors",
       "version": "1.3.0",
-      "bom-ref": "argus@1.2.0|es-errors@1.3.0",
+      "bom-ref": "argus@1.3.0|es-errors@1.3.0",
       "licenses": [
         {
           "license": {
@@ -1829,7 +1829,7 @@
       "type": "library",
       "name": "object-inspect",
       "version": "1.13.4",
-      "bom-ref": "argus@1.2.0|object-inspect@1.13.4",
+      "bom-ref": "argus@1.3.0|object-inspect@1.13.4",
       "licenses": [
         {
           "license": {
@@ -1863,7 +1863,7 @@
       "type": "library",
       "name": "side-channel-list",
       "version": "1.0.1",
-      "bom-ref": "argus@1.2.0|side-channel-list@1.0.1",
+      "bom-ref": "argus@1.3.0|side-channel-list@1.0.1",
       "licenses": [
         {
           "license": {
@@ -1897,7 +1897,7 @@
       "type": "library",
       "name": "side-channel-map",
       "version": "1.0.1",
-      "bom-ref": "argus@1.2.0|side-channel-map@1.0.1",
+      "bom-ref": "argus@1.3.0|side-channel-map@1.0.1",
       "licenses": [
         {
           "license": {
@@ -1931,7 +1931,7 @@
       "type": "library",
       "name": "side-channel-weakmap",
       "version": "1.0.2",
-      "bom-ref": "argus@1.2.0|side-channel-weakmap@1.0.2",
+      "bom-ref": "argus@1.3.0|side-channel-weakmap@1.0.2",
       "licenses": [
         {
           "license": {
@@ -1965,7 +1965,7 @@
       "type": "library",
       "name": "call-bound",
       "version": "1.0.4",
-      "bom-ref": "argus@1.2.0|call-bound@1.0.4",
+      "bom-ref": "argus@1.3.0|call-bound@1.0.4",
       "licenses": [
         {
           "license": {
@@ -1999,7 +1999,7 @@
       "type": "library",
       "name": "get-intrinsic",
       "version": "1.3.0",
-      "bom-ref": "argus@1.2.0|get-intrinsic@1.3.0",
+      "bom-ref": "argus@1.3.0|get-intrinsic@1.3.0",
       "licenses": [
         {
           "license": {
@@ -2033,7 +2033,7 @@
       "type": "library",
       "name": "call-bind-apply-helpers",
       "version": "1.0.2",
-      "bom-ref": "argus@1.2.0|call-bind-apply-helpers@1.0.2",
+      "bom-ref": "argus@1.3.0|call-bind-apply-helpers@1.0.2",
       "licenses": [
         {
           "license": {
@@ -2067,7 +2067,7 @@
       "type": "library",
       "name": "es-object-atoms",
       "version": "1.1.2",
-      "bom-ref": "argus@1.2.0|es-object-atoms@1.1.2",
+      "bom-ref": "argus@1.3.0|es-object-atoms@1.1.2",
       "licenses": [
         {
           "license": {
@@ -2101,7 +2101,7 @@
       "type": "library",
       "name": "function-bind",
       "version": "1.1.2",
-      "bom-ref": "argus@1.2.0|function-bind@1.1.2",
+      "bom-ref": "argus@1.3.0|function-bind@1.1.2",
       "licenses": [
         {
           "license": {
@@ -2135,7 +2135,7 @@
       "type": "library",
       "name": "get-proto",
       "version": "1.0.1",
-      "bom-ref": "argus@1.2.0|get-proto@1.0.1",
+      "bom-ref": "argus@1.3.0|get-proto@1.0.1",
       "licenses": [
         {
           "license": {
@@ -2169,7 +2169,7 @@
       "type": "library",
       "name": "gopd",
       "version": "1.2.0",
-      "bom-ref": "argus@1.2.0|gopd@1.2.0",
+      "bom-ref": "argus@1.3.0|gopd@1.2.0",
       "licenses": [
         {
           "license": {
@@ -2203,7 +2203,7 @@
       "type": "library",
       "name": "has-symbols",
       "version": "1.1.0",
-      "bom-ref": "argus@1.2.0|has-symbols@1.1.0",
+      "bom-ref": "argus@1.3.0|has-symbols@1.1.0",
       "licenses": [
         {
           "license": {
@@ -2237,7 +2237,7 @@
       "type": "library",
       "name": "hasown",
       "version": "2.0.4",
-      "bom-ref": "argus@1.2.0|hasown@2.0.4",
+      "bom-ref": "argus@1.3.0|hasown@2.0.4",
       "licenses": [
         {
           "license": {
@@ -2271,7 +2271,7 @@
       "type": "library",
       "name": "math-intrinsics",
       "version": "1.1.0",
-      "bom-ref": "argus@1.2.0|math-intrinsics@1.1.0",
+      "bom-ref": "argus@1.3.0|math-intrinsics@1.1.0",
       "licenses": [
         {
           "license": {
@@ -2305,7 +2305,7 @@
       "type": "library",
       "name": "dunder-proto",
       "version": "1.0.1",
-      "bom-ref": "argus@1.2.0|dunder-proto@1.0.1",
+      "bom-ref": "argus@1.3.0|dunder-proto@1.0.1",
       "licenses": [
         {
           "license": {
@@ -2479,391 +2479,430 @@
           "url": "https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"
         }
       ]
+    },
+    {
+      "type": "library",
+      "name": "yaml",
+      "version": "2.9.1",
+      "bom-ref": "argus@1.3.0|yaml@2.9.1",
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/yaml@2.9.1",
+      "externalReferences": [
+        {
+          "url": "https://registry.npmjs.org/yaml/-/yaml-2.9.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "dcdc4df3eefc39dcdb4fb0bf5a31acc9f3c0b4968ddc5343b16c6fed8ee6703b13fe83a6816f01a72410145067bd91378fd63649dcf550b14b7b32fb11bdb217"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/yaml"
+        }
+      ]
     }
   ],
   "dependencies": [
     {
-      "ref": "argus@1.2.0",
+      "ref": "argus@1.3.0",
       "dependsOn": [
-        "argus@1.2.0|express@5.3.0"
+        "argus@1.3.0|express@5.3.0",
+        "argus@1.3.0|yaml@2.9.1"
       ]
     },
     {
-      "ref": "argus@1.2.0|express@5.3.0",
+      "ref": "argus@1.3.0|express@5.3.0",
       "dependsOn": [
-        "argus@1.2.0|accepts@2.0.0",
-        "argus@1.2.0|body-parser@2.3.0",
-        "argus@1.2.0|content-disposition@2.0.1",
-        "argus@1.2.0|content-type@2.1.0",
-        "argus@1.2.0|cookie-signature@1.2.2",
-        "argus@1.2.0|cookie@0.7.2",
-        "argus@1.2.0|debug@4.4.3",
-        "argus@1.2.0|depd@2.0.0",
-        "argus@1.2.0|encodeurl@2.0.0",
-        "argus@1.2.0|escape-html@1.0.3",
-        "argus@1.2.0|etag@1.8.1",
-        "argus@1.2.0|finalhandler@2.1.1",
-        "argus@1.2.0|fresh@2.0.0",
-        "argus@1.2.0|http-errors@2.0.1",
-        "argus@1.2.0|merge-descriptors@2.0.0",
-        "argus@1.2.0|mime-types@3.0.2",
-        "argus@1.2.0|on-finished@2.4.1",
-        "argus@1.2.0|once@1.4.0",
-        "argus@1.2.0|parseurl@1.3.3",
-        "argus@1.2.0|proxy-addr@2.0.8",
-        "argus@1.2.0|qs@6.16.1",
-        "argus@1.2.0|range-parser@1.3.0",
-        "argus@1.2.0|router@2.2.0",
-        "argus@1.2.0|send@1.2.1",
-        "argus@1.2.0|serve-static@2.2.1",
-        "argus@1.2.0|statuses@2.0.2",
-        "argus@1.2.0|type-is@2.1.0",
-        "argus@1.2.0|vary@1.1.2"
+        "argus@1.3.0|accepts@2.0.0",
+        "argus@1.3.0|body-parser@2.3.0",
+        "argus@1.3.0|content-disposition@2.0.1",
+        "argus@1.3.0|content-type@2.1.0",
+        "argus@1.3.0|cookie-signature@1.2.2",
+        "argus@1.3.0|cookie@0.7.2",
+        "argus@1.3.0|debug@4.4.3",
+        "argus@1.3.0|depd@2.0.0",
+        "argus@1.3.0|encodeurl@2.0.0",
+        "argus@1.3.0|escape-html@1.0.3",
+        "argus@1.3.0|etag@1.8.1",
+        "argus@1.3.0|finalhandler@2.1.1",
+        "argus@1.3.0|fresh@2.0.0",
+        "argus@1.3.0|http-errors@2.0.1",
+        "argus@1.3.0|merge-descriptors@2.0.0",
+        "argus@1.3.0|mime-types@3.0.2",
+        "argus@1.3.0|on-finished@2.4.1",
+        "argus@1.3.0|once@1.4.0",
+        "argus@1.3.0|parseurl@1.3.3",
+        "argus@1.3.0|proxy-addr@2.0.8",
+        "argus@1.3.0|qs@6.16.1",
+        "argus@1.3.0|range-parser@1.3.0",
+        "argus@1.3.0|router@2.2.0",
+        "argus@1.3.0|send@1.2.1",
+        "argus@1.3.0|serve-static@2.2.1",
+        "argus@1.3.0|statuses@2.0.2",
+        "argus@1.3.0|type-is@2.1.0",
+        "argus@1.3.0|vary@1.1.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|accepts@2.0.0",
+      "ref": "argus@1.3.0|accepts@2.0.0",
       "dependsOn": [
-        "argus@1.2.0|mime-types@3.0.2",
-        "argus@1.2.0|negotiator@1.1.0"
+        "argus@1.3.0|mime-types@3.0.2",
+        "argus@1.3.0|negotiator@1.1.0"
       ]
     },
     {
-      "ref": "argus@1.2.0|body-parser@2.3.0",
+      "ref": "argus@1.3.0|body-parser@2.3.0",
       "dependsOn": [
-        "argus@1.2.0|bytes@3.1.2",
-        "argus@1.2.0|content-type@2.1.0",
-        "argus@1.2.0|debug@4.4.3",
-        "argus@1.2.0|http-errors@2.0.1",
-        "argus@1.2.0|iconv-lite@0.7.3",
-        "argus@1.2.0|on-finished@2.4.1",
-        "argus@1.2.0|qs@6.16.1",
-        "argus@1.2.0|raw-body@3.0.2",
-        "argus@1.2.0|type-is@2.1.0"
+        "argus@1.3.0|bytes@3.1.2",
+        "argus@1.3.0|content-type@2.1.0",
+        "argus@1.3.0|debug@4.4.3",
+        "argus@1.3.0|http-errors@2.0.1",
+        "argus@1.3.0|iconv-lite@0.7.3",
+        "argus@1.3.0|on-finished@2.4.1",
+        "argus@1.3.0|qs@6.16.1",
+        "argus@1.3.0|raw-body@3.0.2",
+        "argus@1.3.0|type-is@2.1.0"
       ]
     },
     {
-      "ref": "argus@1.2.0|content-disposition@2.0.1"
+      "ref": "argus@1.3.0|content-disposition@2.0.1"
     },
     {
-      "ref": "argus@1.2.0|content-type@2.1.0"
+      "ref": "argus@1.3.0|content-type@2.1.0"
     },
     {
-      "ref": "argus@1.2.0|cookie-signature@1.2.2"
+      "ref": "argus@1.3.0|cookie-signature@1.2.2"
     },
     {
-      "ref": "argus@1.2.0|cookie@0.7.2"
+      "ref": "argus@1.3.0|cookie@0.7.2"
     },
     {
-      "ref": "argus@1.2.0|debug@4.4.3",
+      "ref": "argus@1.3.0|debug@4.4.3",
       "dependsOn": [
-        "argus@1.2.0|ms@2.1.3"
+        "argus@1.3.0|ms@2.1.3"
       ]
     },
     {
-      "ref": "argus@1.2.0|depd@2.0.0"
+      "ref": "argus@1.3.0|depd@2.0.0"
     },
     {
-      "ref": "argus@1.2.0|encodeurl@2.0.0"
+      "ref": "argus@1.3.0|encodeurl@2.0.0"
     },
     {
-      "ref": "argus@1.2.0|escape-html@1.0.3"
+      "ref": "argus@1.3.0|escape-html@1.0.3"
     },
     {
-      "ref": "argus@1.2.0|etag@1.8.1"
+      "ref": "argus@1.3.0|etag@1.8.1"
     },
     {
-      "ref": "argus@1.2.0|finalhandler@2.1.1",
+      "ref": "argus@1.3.0|finalhandler@2.1.1",
       "dependsOn": [
-        "argus@1.2.0|debug@4.4.3",
-        "argus@1.2.0|encodeurl@2.0.0",
-        "argus@1.2.0|escape-html@1.0.3",
-        "argus@1.2.0|on-finished@2.4.1",
-        "argus@1.2.0|parseurl@1.3.3",
-        "argus@1.2.0|statuses@2.0.2"
+        "argus@1.3.0|debug@4.4.3",
+        "argus@1.3.0|encodeurl@2.0.0",
+        "argus@1.3.0|escape-html@1.0.3",
+        "argus@1.3.0|on-finished@2.4.1",
+        "argus@1.3.0|parseurl@1.3.3",
+        "argus@1.3.0|statuses@2.0.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|fresh@2.0.0"
+      "ref": "argus@1.3.0|fresh@2.0.0"
     },
     {
-      "ref": "argus@1.2.0|http-errors@2.0.1",
+      "ref": "argus@1.3.0|http-errors@2.0.1",
       "dependsOn": [
-        "argus@1.2.0|depd@2.0.0",
-        "argus@1.2.0|inherits@2.0.4",
-        "argus@1.2.0|setprototypeof@1.2.0",
-        "argus@1.2.0|statuses@2.0.2",
-        "argus@1.2.0|toidentifier@1.0.1"
+        "argus@1.3.0|depd@2.0.0",
+        "argus@1.3.0|inherits@2.0.4",
+        "argus@1.3.0|setprototypeof@1.2.0",
+        "argus@1.3.0|statuses@2.0.2",
+        "argus@1.3.0|toidentifier@1.0.1"
       ]
     },
     {
-      "ref": "argus@1.2.0|merge-descriptors@2.0.0"
+      "ref": "argus@1.3.0|merge-descriptors@2.0.0"
     },
     {
-      "ref": "argus@1.2.0|mime-types@3.0.2",
+      "ref": "argus@1.3.0|mime-types@3.0.2",
       "dependsOn": [
-        "argus@1.2.0|mime-db@1.54.0"
+        "argus@1.3.0|mime-db@1.54.0"
       ]
     },
     {
-      "ref": "argus@1.2.0|on-finished@2.4.1",
+      "ref": "argus@1.3.0|on-finished@2.4.1",
       "dependsOn": [
-        "argus@1.2.0|ee-first@1.1.1"
+        "argus@1.3.0|ee-first@1.1.1"
       ]
     },
     {
-      "ref": "argus@1.2.0|once@1.4.0",
+      "ref": "argus@1.3.0|once@1.4.0",
       "dependsOn": [
-        "argus@1.2.0|wrappy@1.0.2"
+        "argus@1.3.0|wrappy@1.0.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|parseurl@1.3.3"
+      "ref": "argus@1.3.0|parseurl@1.3.3"
     },
     {
-      "ref": "argus@1.2.0|proxy-addr@2.0.8",
+      "ref": "argus@1.3.0|proxy-addr@2.0.8",
       "dependsOn": [
-        "argus@1.2.0|forwarded@0.2.0",
-        "argus@1.2.0|ipaddr.js@1.9.1"
+        "argus@1.3.0|forwarded@0.2.0",
+        "argus@1.3.0|ipaddr.js@1.9.1"
       ]
     },
     {
-      "ref": "argus@1.2.0|qs@6.16.1",
+      "ref": "argus@1.3.0|qs@6.16.1",
       "dependsOn": [
-        "argus@1.2.0|es-define-property@1.0.1",
-        "argus@1.2.0|side-channel@1.1.1"
+        "argus@1.3.0|es-define-property@1.0.1",
+        "argus@1.3.0|side-channel@1.1.1"
       ]
     },
     {
-      "ref": "argus@1.2.0|range-parser@1.3.0"
+      "ref": "argus@1.3.0|range-parser@1.3.0"
     },
     {
-      "ref": "argus@1.2.0|router@2.2.0",
+      "ref": "argus@1.3.0|router@2.2.0",
       "dependsOn": [
-        "argus@1.2.0|debug@4.4.3",
-        "argus@1.2.0|depd@2.0.0",
-        "argus@1.2.0|is-promise@4.0.0",
-        "argus@1.2.0|parseurl@1.3.3",
-        "argus@1.2.0|path-to-regexp@8.4.2"
+        "argus@1.3.0|debug@4.4.3",
+        "argus@1.3.0|depd@2.0.0",
+        "argus@1.3.0|is-promise@4.0.0",
+        "argus@1.3.0|parseurl@1.3.3",
+        "argus@1.3.0|path-to-regexp@8.4.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|send@1.2.1",
+      "ref": "argus@1.3.0|send@1.2.1",
       "dependsOn": [
-        "argus@1.2.0|debug@4.4.3",
-        "argus@1.2.0|encodeurl@2.0.0",
-        "argus@1.2.0|escape-html@1.0.3",
-        "argus@1.2.0|etag@1.8.1",
-        "argus@1.2.0|fresh@2.0.0",
-        "argus@1.2.0|http-errors@2.0.1",
-        "argus@1.2.0|mime-types@3.0.2",
-        "argus@1.2.0|ms@2.1.3",
-        "argus@1.2.0|on-finished@2.4.1",
-        "argus@1.2.0|range-parser@1.3.0",
-        "argus@1.2.0|statuses@2.0.2"
+        "argus@1.3.0|debug@4.4.3",
+        "argus@1.3.0|encodeurl@2.0.0",
+        "argus@1.3.0|escape-html@1.0.3",
+        "argus@1.3.0|etag@1.8.1",
+        "argus@1.3.0|fresh@2.0.0",
+        "argus@1.3.0|http-errors@2.0.1",
+        "argus@1.3.0|mime-types@3.0.2",
+        "argus@1.3.0|ms@2.1.3",
+        "argus@1.3.0|on-finished@2.4.1",
+        "argus@1.3.0|range-parser@1.3.0",
+        "argus@1.3.0|statuses@2.0.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|serve-static@2.2.1",
+      "ref": "argus@1.3.0|serve-static@2.2.1",
       "dependsOn": [
-        "argus@1.2.0|encodeurl@2.0.0",
-        "argus@1.2.0|escape-html@1.0.3",
-        "argus@1.2.0|parseurl@1.3.3",
-        "argus@1.2.0|send@1.2.1"
+        "argus@1.3.0|encodeurl@2.0.0",
+        "argus@1.3.0|escape-html@1.0.3",
+        "argus@1.3.0|parseurl@1.3.3",
+        "argus@1.3.0|send@1.2.1"
       ]
     },
     {
-      "ref": "argus@1.2.0|statuses@2.0.2"
+      "ref": "argus@1.3.0|statuses@2.0.2"
     },
     {
-      "ref": "argus@1.2.0|type-is@2.1.0",
+      "ref": "argus@1.3.0|type-is@2.1.0",
       "dependsOn": [
-        "argus@1.2.0|content-type@2.1.0",
-        "argus@1.2.0|media-typer@1.1.1",
-        "argus@1.2.0|mime-types@3.0.2"
+        "argus@1.3.0|content-type@2.1.0",
+        "argus@1.3.0|media-typer@1.1.1",
+        "argus@1.3.0|mime-types@3.0.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|vary@1.1.2"
+      "ref": "argus@1.3.0|vary@1.1.2"
     },
     {
-      "ref": "argus@1.2.0|negotiator@1.1.0",
+      "ref": "argus@1.3.0|negotiator@1.1.0",
       "dependsOn": [
-        "argus@1.2.0|content-type@2.1.0"
+        "argus@1.3.0|content-type@2.1.0"
       ]
     },
     {
-      "ref": "argus@1.2.0|bytes@3.1.2"
+      "ref": "argus@1.3.0|bytes@3.1.2"
     },
     {
-      "ref": "argus@1.2.0|iconv-lite@0.7.3",
+      "ref": "argus@1.3.0|iconv-lite@0.7.3",
       "dependsOn": [
-        "argus@1.2.0|safer-buffer@2.1.2"
+        "argus@1.3.0|safer-buffer@2.1.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|raw-body@3.0.2",
+      "ref": "argus@1.3.0|raw-body@3.0.2",
       "dependsOn": [
-        "argus@1.2.0|bytes@3.1.2",
-        "argus@1.2.0|http-errors@2.0.1",
-        "argus@1.2.0|iconv-lite@0.7.3",
-        "argus@1.2.0|unpipe@1.0.0"
+        "argus@1.3.0|bytes@3.1.2",
+        "argus@1.3.0|http-errors@2.0.1",
+        "argus@1.3.0|iconv-lite@0.7.3",
+        "argus@1.3.0|unpipe@1.0.0"
       ]
     },
     {
-      "ref": "argus@1.2.0|ms@2.1.3"
+      "ref": "argus@1.3.0|ms@2.1.3"
     },
     {
-      "ref": "argus@1.2.0|inherits@2.0.4"
+      "ref": "argus@1.3.0|inherits@2.0.4"
     },
     {
-      "ref": "argus@1.2.0|setprototypeof@1.2.0"
+      "ref": "argus@1.3.0|setprototypeof@1.2.0"
     },
     {
-      "ref": "argus@1.2.0|toidentifier@1.0.1"
+      "ref": "argus@1.3.0|toidentifier@1.0.1"
     },
     {
-      "ref": "argus@1.2.0|mime-db@1.54.0"
+      "ref": "argus@1.3.0|mime-db@1.54.0"
     },
     {
-      "ref": "argus@1.2.0|ee-first@1.1.1"
+      "ref": "argus@1.3.0|ee-first@1.1.1"
     },
     {
-      "ref": "argus@1.2.0|wrappy@1.0.2"
+      "ref": "argus@1.3.0|wrappy@1.0.2"
     },
     {
-      "ref": "argus@1.2.0|forwarded@0.2.0"
+      "ref": "argus@1.3.0|forwarded@0.2.0"
     },
     {
-      "ref": "argus@1.2.0|ipaddr.js@1.9.1"
+      "ref": "argus@1.3.0|ipaddr.js@1.9.1"
     },
     {
-      "ref": "argus@1.2.0|es-define-property@1.0.1"
+      "ref": "argus@1.3.0|es-define-property@1.0.1"
     },
     {
-      "ref": "argus@1.2.0|side-channel@1.1.1",
+      "ref": "argus@1.3.0|side-channel@1.1.1",
       "dependsOn": [
-        "argus@1.2.0|es-errors@1.3.0",
-        "argus@1.2.0|object-inspect@1.13.4",
-        "argus@1.2.0|side-channel-list@1.0.1",
-        "argus@1.2.0|side-channel-map@1.0.1",
-        "argus@1.2.0|side-channel-weakmap@1.0.2"
+        "argus@1.3.0|es-errors@1.3.0",
+        "argus@1.3.0|object-inspect@1.13.4",
+        "argus@1.3.0|side-channel-list@1.0.1",
+        "argus@1.3.0|side-channel-map@1.0.1",
+        "argus@1.3.0|side-channel-weakmap@1.0.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|is-promise@4.0.0"
+      "ref": "argus@1.3.0|is-promise@4.0.0"
     },
     {
-      "ref": "argus@1.2.0|path-to-regexp@8.4.2"
+      "ref": "argus@1.3.0|path-to-regexp@8.4.2"
     },
     {
-      "ref": "argus@1.2.0|media-typer@1.1.1"
+      "ref": "argus@1.3.0|media-typer@1.1.1"
     },
     {
-      "ref": "argus@1.2.0|safer-buffer@2.1.2"
+      "ref": "argus@1.3.0|safer-buffer@2.1.2"
     },
     {
-      "ref": "argus@1.2.0|unpipe@1.0.0"
+      "ref": "argus@1.3.0|unpipe@1.0.0"
     },
     {
-      "ref": "argus@1.2.0|es-errors@1.3.0"
+      "ref": "argus@1.3.0|es-errors@1.3.0"
     },
     {
-      "ref": "argus@1.2.0|object-inspect@1.13.4"
+      "ref": "argus@1.3.0|object-inspect@1.13.4"
     },
     {
-      "ref": "argus@1.2.0|side-channel-list@1.0.1",
+      "ref": "argus@1.3.0|side-channel-list@1.0.1",
       "dependsOn": [
-        "argus@1.2.0|es-errors@1.3.0",
-        "argus@1.2.0|object-inspect@1.13.4"
+        "argus@1.3.0|es-errors@1.3.0",
+        "argus@1.3.0|object-inspect@1.13.4"
       ]
     },
     {
-      "ref": "argus@1.2.0|side-channel-map@1.0.1",
+      "ref": "argus@1.3.0|side-channel-map@1.0.1",
       "dependsOn": [
-        "argus@1.2.0|call-bound@1.0.4",
-        "argus@1.2.0|es-errors@1.3.0",
-        "argus@1.2.0|get-intrinsic@1.3.0",
-        "argus@1.2.0|object-inspect@1.13.4"
+        "argus@1.3.0|call-bound@1.0.4",
+        "argus@1.3.0|es-errors@1.3.0",
+        "argus@1.3.0|get-intrinsic@1.3.0",
+        "argus@1.3.0|object-inspect@1.13.4"
       ]
     },
     {
-      "ref": "argus@1.2.0|side-channel-weakmap@1.0.2",
+      "ref": "argus@1.3.0|side-channel-weakmap@1.0.2",
       "dependsOn": [
-        "argus@1.2.0|call-bound@1.0.4",
-        "argus@1.2.0|es-errors@1.3.0",
-        "argus@1.2.0|get-intrinsic@1.3.0",
-        "argus@1.2.0|object-inspect@1.13.4",
-        "argus@1.2.0|side-channel-map@1.0.1"
+        "argus@1.3.0|call-bound@1.0.4",
+        "argus@1.3.0|es-errors@1.3.0",
+        "argus@1.3.0|get-intrinsic@1.3.0",
+        "argus@1.3.0|object-inspect@1.13.4",
+        "argus@1.3.0|side-channel-map@1.0.1"
       ]
     },
     {
-      "ref": "argus@1.2.0|call-bound@1.0.4",
+      "ref": "argus@1.3.0|call-bound@1.0.4",
       "dependsOn": [
-        "argus@1.2.0|call-bind-apply-helpers@1.0.2",
-        "argus@1.2.0|get-intrinsic@1.3.0"
+        "argus@1.3.0|call-bind-apply-helpers@1.0.2",
+        "argus@1.3.0|get-intrinsic@1.3.0"
       ]
     },
     {
-      "ref": "argus@1.2.0|get-intrinsic@1.3.0",
+      "ref": "argus@1.3.0|get-intrinsic@1.3.0",
       "dependsOn": [
-        "argus@1.2.0|call-bind-apply-helpers@1.0.2",
-        "argus@1.2.0|es-define-property@1.0.1",
-        "argus@1.2.0|es-errors@1.3.0",
-        "argus@1.2.0|es-object-atoms@1.1.2",
-        "argus@1.2.0|function-bind@1.1.2",
-        "argus@1.2.0|get-proto@1.0.1",
-        "argus@1.2.0|gopd@1.2.0",
-        "argus@1.2.0|has-symbols@1.1.0",
-        "argus@1.2.0|hasown@2.0.4",
-        "argus@1.2.0|math-intrinsics@1.1.0"
+        "argus@1.3.0|call-bind-apply-helpers@1.0.2",
+        "argus@1.3.0|es-define-property@1.0.1",
+        "argus@1.3.0|es-errors@1.3.0",
+        "argus@1.3.0|es-object-atoms@1.1.2",
+        "argus@1.3.0|function-bind@1.1.2",
+        "argus@1.3.0|get-proto@1.0.1",
+        "argus@1.3.0|gopd@1.2.0",
+        "argus@1.3.0|has-symbols@1.1.0",
+        "argus@1.3.0|hasown@2.0.4",
+        "argus@1.3.0|math-intrinsics@1.1.0"
       ]
     },
     {
-      "ref": "argus@1.2.0|call-bind-apply-helpers@1.0.2",
+      "ref": "argus@1.3.0|call-bind-apply-helpers@1.0.2",
       "dependsOn": [
-        "argus@1.2.0|es-errors@1.3.0",
-        "argus@1.2.0|function-bind@1.1.2"
+        "argus@1.3.0|es-errors@1.3.0",
+        "argus@1.3.0|function-bind@1.1.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|es-object-atoms@1.1.2",
+      "ref": "argus@1.3.0|es-object-atoms@1.1.2",
       "dependsOn": [
-        "argus@1.2.0|es-errors@1.3.0"
+        "argus@1.3.0|es-errors@1.3.0"
       ]
     },
     {
-      "ref": "argus@1.2.0|function-bind@1.1.2"
+      "ref": "argus@1.3.0|function-bind@1.1.2"
     },
     {
-      "ref": "argus@1.2.0|get-proto@1.0.1",
+      "ref": "argus@1.3.0|get-proto@1.0.1",
       "dependsOn": [
-        "argus@1.2.0|dunder-proto@1.0.1",
-        "argus@1.2.0|es-object-atoms@1.1.2"
+        "argus@1.3.0|dunder-proto@1.0.1",
+        "argus@1.3.0|es-object-atoms@1.1.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|gopd@1.2.0"
+      "ref": "argus@1.3.0|gopd@1.2.0"
     },
     {
-      "ref": "argus@1.2.0|has-symbols@1.1.0"
+      "ref": "argus@1.3.0|has-symbols@1.1.0"
     },
     {
-      "ref": "argus@1.2.0|hasown@2.0.4",
+      "ref": "argus@1.3.0|hasown@2.0.4",
       "dependsOn": [
-        "argus@1.2.0|function-bind@1.1.2"
+        "argus@1.3.0|function-bind@1.1.2"
       ]
     },
     {
-      "ref": "argus@1.2.0|math-intrinsics@1.1.0"
+      "ref": "argus@1.3.0|math-intrinsics@1.1.0"
     },
     {
-      "ref": "argus@1.2.0|dunder-proto@1.0.1",
+      "ref": "argus@1.3.0|dunder-proto@1.0.1",
       "dependsOn": [
-        "argus@1.2.0|call-bind-apply-helpers@1.0.2",
-        "argus@1.2.0|es-errors@1.3.0",
-        "argus@1.2.0|gopd@1.2.0"
+        "argus@1.3.0|call-bind-apply-helpers@1.0.2",
+        "argus@1.3.0|es-errors@1.3.0",
+        "argus@1.3.0|gopd@1.2.0"
       ]
+    },
+    {
+      "ref": "argus@1.3.0|yaml@2.9.1",
+      "dependsOn": []
     }
   ]
 }

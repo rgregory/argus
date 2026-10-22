@@ -114,7 +114,7 @@ posture() {
   case "$(defaults read /Library/Preferences/com.apple.loginwindow GuestEnabled 2>/dev/null)" in 1) echo "Guest account: On";; *) echo "Guest account: Off";; esac
   echo; echo "== Sharing services"
   local svc dis; dis=$(launchctl print-disabled system 2>/dev/null)
-  for svc in com.apple.screensharing com.apple.smbd com.apple.ftp-proxy com.apple.AEServer; do
+  for svc in com.apple.screensharing com.apple.smbd com.apple.AEServer; do
     if launchctl print "system/$svc" >/dev/null 2>&1 && ! printf '%s' "$dis" | grep -Eq "\"$svc\" => (disabled|true)"; then echo "$svc: loaded"; else echo "$svc: off"; fi
   done
   echo; echo "== Time Machine"

@@ -12,6 +12,7 @@ const { CrowdSec } = require('./lib/crowdsec');
 const { Intel } = require('./lib/intel');
 const { Throughput } = require('./lib/throughput');
 const { MacIngest, SyslogTail, PiHole } = require('./lib/ingest');
+const { FindingState } = require('./lib/findings');
 
 const log = logger('argus');
 const store = new Store(cfg.state);
@@ -22,6 +23,7 @@ const intel = new Intel(store, feeds, cs);
 const mac = new MacIngest(store, intel, tp);
 const syslog = new SyslogTail(store, intel, tp);
 const pihole = new PiHole(mac, intel, store, tp);
+const fstate = new FindingState(store);
 
 let report = null, reportAt = 0;
 const started = Date.now();
@@ -46,12 +48,16 @@ function buildReport() {
     seen.set(slug, n);
     f.id = n > 1 ? `${slug}#${n}` : slug;
   });
+  // acknowledged findings stay in the list (flagged) but don't count
+  const acked = fstate.annotate(findings);
   const counts = { high: 0, medium: 0, low: 0, info: 0 };
-  findings.forEach(f => { counts[f.sev]++; });
+  findings.forEach(f => { if (!f.acked) counts[f.sev]++; });
+  fstate.snapshot(findings);
+  const changes = fstate.changes(findings);
   report = {
     generated: new Date(), version: cfg.version, uptime: Date.now() - started,
     host: { name: mac.meta.host || m.meta.host || cfg.macHost || '', os: mac.meta.os || m.meta.os || '', build: m.meta.build || '', tz: process.env.TZ || '' },
-    counts, findings, posture: m.posture, timeline: m.timeline,
+    counts, findings, posture: m.posture, timeline: m.timeline, changes, findingState: { acked, acks: fstate.acks().length },
     window: { from: m.meta.minTs, to: m.meta.maxTs, events: m.meta.events, hours: cfg.windowHours },
     macos: { access: m.access, protect: m.protect, persistence: m.persistence, network: m.network, crashes: m.crashes, system: m.system, containers: m.containers, ollama: m.ollama, files: m.files.slice(-200) },
     dns: mac.dnsReport ? mac.dnsReport.dns : null,
@@ -94,6 +100,7 @@ async function main() {
   every('intel', cfg.osint.autoEvery, () => intel.tick(), log);
   every('report', 60e3, async () => { buildReport(); }, log);
   every('export', 5 * 60e3, async () => { exportFiles(); }, log);
+  every('digest', 10 * 60e3, async () => { if (fstate.digestDue()) fstate.writeDigest(report || buildReport()); }, log);
   every('housekeeping', 3600e3, async () => { mac.prune(); intel.prune(cfg.retainDays * 2); store.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); }, log);
 
   const app = express();
@@ -162,7 +169,7 @@ async function main() {
     if (q) {
       if (!tokenOk(q)) return res.status(401).type('html').send(UNAUTH);
       res.set('Set-Cookie', `argus_token=${encodeURIComponent(q)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=7776000`);
-      // Always land on the dashboard home: echoing req.path back allowed //host and /\\host,
+      // Always land on the dashboard home: echoing req.path back allowed //host and /\host,
       // which browsers follow off-site (an open redirect for anyone holding the token).
       return res.redirect(302, '/');
     }
@@ -192,6 +199,22 @@ async function main() {
   app.post('/api/vulns/refresh', async (req, res) => {
     mac.vulns.refresh(true).then(() => { mac.dirty = true; log.info('manual vulnerability-data refresh done'); }).catch(e => log.warn(e.message));
     res.json({ ok: true, message: 'refresh started' });
+  });
+  app.post('/api/findings/ack', (req, res) => {
+    const id = String((req.body && req.body.id) || '');
+    const f = (report || buildReport()).findings.find(x => x.id === id);
+    if (!f) return res.status(404).json({ error: 'no such finding (the report may have changed; reload)' });
+    fstate.ack(f.id, f.fp, f.title, (req.body && req.body.note) || '');
+    buildReport(); res.json({ ok: true });
+  });
+  app.post('/api/findings/unack', (req, res) => {
+    fstate.unack(String((req.body && req.body.id) || '')); buildReport(); res.json({ ok: true });
+  });
+  app.get('/api/findings/acks', (req, res) => res.json(fstate.acks()));
+  app.get('/api/digest', (req, res) => {
+    const r = report || buildReport();
+    const html = req.query.fresh ? fstate.writeDigest(r) : (() => { try { return fs.readFileSync(path.join(cfg.data, 'reports', 'digest-latest.html'), 'utf8'); } catch (e) { return fstate.writeDigest(r); } })();
+    res.type('html').send(html);
   });
   app.post('/api/rescan', async (req, res) => { mac.lastRebuild = 0; await mac.cycle(); buildReport(); res.json({ ok: true }); });
   app.get('/api/export/findings.csv', (req, res) => res.type('text/csv').attachment('argus-findings.csv').send(findingsCsv((report || buildReport()).findings)));

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Argus</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1/dist/css/tabler.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400..700,0..100&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
@@ -34,6 +36,97 @@
   .clickable { cursor: pointer; }
   [x-cloak] { display: none !important; }
   .navbar-nav .nav-link { padding-left: .6rem; padding-right: .6rem; }
+  /* ===================================================================== editorial theme
+     Paper and ink, serif small-caps headlines asked as questions, one colour per area. */
+  :root, [data-bs-theme=light] {
+    --paper: #f3eee3; --paper-2: #faf7f0; --ink: #2a2521; --ink-2: #5d544b; --muted: #8b8073; --rule: #ddd3c1;
+    --sev-high: #b3261e; --sev-medium: #d77a1f; --sev-low: #a98c1c; --sev-info: #5f7a94;
+    --ok: #6b8f71; --field: rgba(42,37,33,.045);
+    --tblr-body-bg: var(--paper); --tblr-bg-surface: var(--paper-2); --tblr-bg-surface-secondary: #f0eadf; --tblr-bg-surface-tertiary: #ebe4d7;
+    --tblr-body-color: var(--ink); --tblr-secondary-color: var(--muted); --tblr-border-color: var(--rule); --tblr-border-color-translucent: var(--rule);
+    --tblr-card-bg: var(--paper-2);
+  }
+  [data-bs-theme=dark] {
+    --paper: #16151a; --paper-2: #1d1c22; --ink: #ece5d8; --ink-2: #c3b9aa; --muted: #8f8679; --rule: #34312e;
+    --sev-high: #ef6a5e; --sev-medium: #f0a04b; --sev-low: #d9bd4f; --sev-info: #8fb0cc; --ok: #8fb596; --field: rgba(236,229,216,.05);
+    --tblr-body-bg: var(--paper); --tblr-bg-surface: var(--paper-2); --tblr-bg-surface-secondary: #232229; --tblr-bg-surface-tertiary: #29282f;
+    --tblr-body-color: var(--ink); --tblr-secondary-color: var(--muted); --tblr-border-color: var(--rule); --tblr-border-color-translucent: var(--rule);
+    --tblr-card-bg: var(--paper-2);
+  }
+  body { background: var(--paper); color: var(--ink); }
+  .card { border: 1px solid var(--rule); box-shadow: none; border-radius: 10px; }
+  .card-header { border-bottom-color: var(--rule); }
+  .card-title, h3.card-title { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .03em; font-weight: 600; font-size: 1.05rem; }
+  .navbar { background: var(--paper) !important; border-bottom: 1px solid var(--rule); }
+  .navbar-brand span { font-family: 'Fraunces', Georgia, serif; font-weight: 600; letter-spacing: .02em; }
+  .navbar-nav .nav-link { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .04em; font-size: .98rem; color: var(--ink-2); }
+  .navbar-nav .nav-item.active .nav-link, .navbar-nav .nav-link:hover { color: var(--ink); }
+  .navbar-nav .nav-item.active .nav-link::after { border-color: var(--ink) !important; }
+  .table thead th { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; text-transform: none; letter-spacing: .04em; font-size: .82rem; color: var(--muted); background: transparent; }
+  .badge { font-weight: 600; letter-spacing: .02em; }
+
+  .ed { max-width: 1120px; margin: 0 auto; padding: .5rem 0 3rem; }
+  .ed-mast { text-align: center; padding: 1.25rem 0 .5rem; }
+  .ed-kicker { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .12em; color: var(--muted); font-size: .95rem; }
+  .ed-title { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-variant: small-caps; letter-spacing: .02em; font-size: clamp(2rem, 4.6vw, 3.4rem); line-height: 1.05; margin: .35rem 0 .9rem; font-variation-settings: "opsz" 144, "SOFT" 50; }
+  .ed-lede { font-family: 'Source Serif 4', Georgia, serif; font-size: clamp(1.02rem, 1.5vw, 1.2rem); line-height: 1.6; color: var(--ink-2); max-width: 46rem; margin: 0 auto; }
+  .ed-lede b, .ed-sub b, .ed-ptext b { font-weight: 700; color: var(--ink); }
+  .ed-ornament { display: flex; align-items: center; gap: 1rem; justify-content: center; margin: 1.6rem auto .5rem; max-width: 30rem; color: var(--muted); }
+  .ed-ornament span { flex: 1; height: 1px; background: var(--rule); }
+  .ed-ornament i { font-size: 1.3rem; }
+  .ed-sec { margin-top: 2.6rem; }
+  .ed-h { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; font-weight: 600; letter-spacing: .03em; text-align: center; font-size: clamp(1.35rem, 2.4vw, 1.8rem); margin: 0; }
+  .ed-sub { font-family: 'Source Serif 4', Georgia, serif; text-align: center; color: var(--ink-2); max-width: 44rem; margin: .35rem auto 1.4rem; font-size: 1.02rem; line-height: 1.55; }
+  .ed-note { text-align: center; color: var(--muted); font-size: .9rem; }
+  .ed-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .ed-chart text { font-family: 'Source Serif 4', Georgia, serif; fill: var(--muted); }
+  .ed-chart .lbl { fill: var(--ink-2); font-size: 11px; }
+  .ed-chart .axis { stroke: var(--rule); }
+
+  .ed-portraits { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1.4rem 1rem; }
+  .ed-portrait { text-align: center; color: inherit; text-decoration: none; padding: .4rem; border-radius: 14px; transition: background .15s; }
+  .ed-portrait:hover { background: var(--field); text-decoration: none; color: inherit; }
+  .ed-ring { width: 128px; height: 128px; margin: 0 auto .4rem; }
+  .ed-pname { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; font-weight: 700; font-size: 1.2rem; letter-spacing: .03em; line-height: 1.1; }
+  .ed-ptext { font-family: 'Source Serif 4', Georgia, serif; font-size: .92rem; line-height: 1.45; color: var(--ink-2); margin: .3rem 0 0; }
+  .ed-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); font-family: 'Source Serif 4', Georgia, serif; }
+
+  .ed-two { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+  .ed-two .ed-h, .ed-two .ed-sub { text-align: left; margin-left: 0; }
+  @media (max-width: 900px) { .ed-two { grid-template-columns: 1fr; gap: 2rem; } }
+  .ed-changes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; border-top: 2px solid var(--ink); padding-top: .6rem; }
+  @media (max-width: 600px) { .ed-changes { grid-template-columns: 1fr; } }
+  .ed-colhead { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .05em; color: var(--muted); margin-bottom: .35rem; }
+  .ed-colhead b { color: var(--ink); font-size: 1.25rem; margin-left: .2rem; }
+  .ed-change { display: flex; gap: .45rem; align-items: baseline; font-family: 'Source Serif 4', Georgia, serif; font-size: .92rem; line-height: 1.35; color: var(--ink); text-decoration: none; padding: .22rem 0; border-bottom: 1px dotted var(--rule); }
+  .ed-change:hover { color: var(--ink); text-decoration: none; background: var(--field); }
+  .ed-change.is-resolved span { text-decoration: line-through; color: var(--muted); }
+  .ed-dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; flex: none; transform: translateY(-.05rem); }
+  .ed-none { color: var(--muted); font-size: .88rem; font-style: italic; font-family: 'Source Serif 4', Georgia, serif; }
+  .ed-link { display: inline-block; margin-top: .9rem; font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .04em; color: var(--ink); border-bottom: 1px solid var(--ink); text-decoration: none; }
+  .ed-link:hover { text-decoration: none; opacity: .75; color: var(--ink); }
+  .ed-list { list-style: none; padding: 0; margin: 0; border-top: 2px solid var(--ink); }
+  .ed-list li { display: grid; grid-template-columns: 2.4rem 9.5rem 1fr; gap: .6rem; align-items: baseline; padding: .55rem .2rem; border-bottom: 1px solid var(--rule); cursor: pointer; }
+  .ed-list li:hover { background: var(--field); }
+  .ed-num { font-family: 'Fraunces', Georgia, serif; font-weight: 700; font-size: 1.15rem; font-variant-numeric: lining-nums; }
+  .ed-area { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .04em; font-weight: 600; font-size: .9rem; }
+  .ed-ftitle { font-family: 'Source Serif 4', Georgia, serif; font-size: .98rem; line-height: 1.35; }
+  @media (max-width: 600px) { .ed-list li { grid-template-columns: 2rem 1fr; } .ed-area { grid-column: 2; } .ed-ftitle { grid-column: 2; } }
+
+  .ed-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
+  .ed-tile { padding: .7rem .8rem; border-radius: 8px; background: var(--field); border-left: 4px solid var(--muted); }
+  .ed-tile.is-fail { background: color-mix(in srgb, var(--sev-high) 14%, transparent); border-left-color: var(--sev-high); }
+  .ed-tile.is-warn { background: color-mix(in srgb, var(--sev-medium) 14%, transparent); border-left-color: var(--sev-medium); }
+  .ed-tile.is-info { background: color-mix(in srgb, var(--sev-info) 12%, transparent); border-left-color: var(--sev-info); }
+  .ed-tile.is-pass { background: color-mix(in srgb, var(--ok) 10%, transparent); border-left-color: var(--ok); opacity: .85; }
+  .ed-tname { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; font-weight: 600; letter-spacing: .03em; }
+  .ed-tval { font-size: .82rem; color: var(--ink-2); margin-top: .15rem; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .ed-foot { margin-top: 3rem; text-align: center; color: var(--muted); font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .06em; font-size: .85rem; border-top: 1px solid var(--rule); padding-top: .9rem; }
+  :root, [data-bs-theme=light] { --tblr-primary: #34445e; --tblr-primary-rgb: 52,68,94; --tblr-primary-fg: #faf7f0; }
+  [data-bs-theme=dark] { --tblr-primary: #c9b991; --tblr-primary-rgb: 201,185,145; --tblr-primary-fg: #16151a; }
+  .btn-primary, .btn-check:checked + .btn { background: var(--tblr-primary) !important; border-color: var(--tblr-primary) !important; color: var(--tblr-primary-fg) !important; }
+  .subheader { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; text-transform: none; letter-spacing: .06em; font-size: .9rem; color: var(--muted); }
+  .navbar-brand .ti { color: var(--ink); }
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
@@ -84,87 +177,99 @@
         <div>
 
         <!-- ============================================================ OVERVIEW -->
-        <div x-show="tab === 'overview'">
-          <div class="row row-cards mb-3">
-            <template x-for="s in ['high','medium','low','info']" :key="s">
-              <div class="col-6 col-md-3 col-xl">
-                <div class="card card-sm clickable" @click="fSev = [s]; setTab('findings')">
-                  <div class="card-body">
-                    <div class="text-secondary text-uppercase small" x-text="s + ' findings'"></div>
-                    <div class="kpi" :class="sevText(s)" x-text="num(r.counts[s])"></div>
-                  </div>
-                </div>
-              </div>
-            </template>
-            <div class="col-6 col-md-3 col-xl">
-              <div class="card card-sm clickable" @click="iRisk = 'flagged'; setTab('indicators')">
-                <div class="card-body"><div class="text-secondary text-uppercase small">Flagged indicators</div>
-                  <div class="kpi" :class="(r.intel.malicious || 0) ? 'text-red' : ''" x-text="num((r.intel.malicious || 0) + (r.intel.suspicious || 0))"></div>
-                  <div class="small text-secondary" x-text="num(r.intel.total || 0) + ' tracked'"></div></div>
-              </div>
-            </div>
-            <div class="col-6 col-md-3 col-xl">
-              <div class="card card-sm clickable" @click="setTab('crowdsec')">
-                <div class="card-body"><div class="text-secondary text-uppercase small">CrowdSec alerts</div>
-                  <div class="kpi" x-text="num(r.crowdsec.alerts.length)"></div>
-                  <div class="small text-secondary" x-text="num(r.crowdsec.decisions) + ' blocklist entries'"></div></div>
-              </div>
-            </div>
-            <div class="col-6 col-md-3 col-xl">
-              <div class="card card-sm clickable" @click="setTab('throughput')">
-                <div class="card-body"><div class="text-secondary text-uppercase small">Ingest (24 h)</div>
-                  <div class="kpi" x-text="num(tpTotal('events'))"></div>
-                  <div class="small text-secondary" x-text="bytes(tpTotal('bytes')) + ' · ' + rate(tpRate()) "></div></div>
-              </div>
-            </div>
-          </div>
+        <div x-show="tab === 'overview'" class="ed">
+          <!-- masthead -->
+          <header class="ed-mast">
+            <div class="ed-kicker" x-text="'The Argus brief · ' + new Date(r.generated).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })"></div>
+            <h1 class="ed-title">What has <span x-text="r.host.name || 'this Mac'"></span> been up&nbsp;to?</h1>
+            <p class="ed-lede" x-html="lede()"></p>
+            <div class="ed-ornament"><span></span><i class="ti ti-eye"></i><span></span></div>
+          </header>
 
-          <div class="row row-cards mb-3">
-            <div class="col-lg-8">
-              <div class="card h-100">
-                <div class="card-header"><h3 class="card-title">Security events per hour</h3>
-                  <div class="card-actions small text-secondary" x-text="r.window.from ? fmt(r.window.from) + ' → ' + fmt(r.window.to) : 'no macOS events yet'"></div></div>
-                <div class="card-body"><div class="chart-box" style="height:360px"><canvas id="ch-timeline"></canvas></div>
-                  <div class="text-secondary small mt-2" x-show="!r.timeline.length">No unified-log events yet. Install the host collector (<code>./argus.sh install-collector</code>) and give it five minutes.</div></div>
-              </div>
+          <!-- portraits -->
+          <section class="ed-sec">
+            <h2 class="ed-h">Where is the attention needed?</h2>
+            <p class="ed-sub" x-html="portraitSub()"></p>
+            <div class="ed-portraits">
+              <template x-for="a in areaStats().slice(0, 6)" :key="a.area">
+                <a href="#" class="ed-portrait" @click.prevent="fArea = a.area; fSev = ['high','medium','low','info']; setTab('findings')">
+                  <div class="ed-ring" x-html="ringSvg(a)"></div>
+                  <div class="ed-pname" :style="'color:' + areaColor(a.area)" x-text="a.area"></div>
+                  <p class="ed-ptext" x-html="portraitText(a)"></p>
+                </a>
+              </template>
+              <div class="ed-empty" x-show="!areaStats().length">Nothing open. Every finding is either resolved or acknowledged.</div>
             </div>
-            <div class="col-lg-4">
-              <div class="card h-100">
-                <div class="card-header"><h3 class="card-title">Posture</h3>
-                  <div class="card-actions small text-secondary" x-show="r.posture.length" x-text="r.posture.filter(p => p.status === 'pass').length + ' passing'"></div></div>
-                <div class="list-group list-group-flush">
-                  <template x-for="p in r.posture.filter(p => p.status !== 'pass' || showPassing)" :key="p.control">
-                    <div class="list-group-item py-1" :title="p.why || ''">
-                      <div class="d-flex align-items-start gap-2 small">
-                        <i class="ti mt-1" :class="statusIcon(p.status)"></i>
-                        <div class="flex-fill text-truncate"><span x-text="p.control"></span><div class="text-secondary text-truncate" x-text="p.value"></div></div>
-                      </div>
-                    </div>
-                  </template>
-                  <div class="list-group-item text-secondary small" x-show="r.posture.length && !showPassing && !r.posture.some(p => p.status !== 'pass')">All checks pass.</div>
-                  <a href="#" class="list-group-item text-secondary small" x-show="r.posture.some(p => p.status === 'pass')" @click.prevent="showPassing = !showPassing" x-text="showPassing ? 'Hide passing checks' : 'Show ' + r.posture.filter(p => p.status === 'pass').length + ' passing checks'"></a>
-                  <div class="list-group-item text-secondary small" x-show="!r.posture.length">Waiting for the first posture snapshot from the collector.</div>
-                </div>
-              </div>
-            </div>
-          </div>
+          </section>
 
-          <div class="card">
-            <div class="card-header"><h3 class="card-title">Top findings</h3><div class="card-actions"><a href="#" @click.prevent="setTab('findings')">All findings →</a></div></div>
-            <div class="list-group list-group-flush">
-              <template x-for="f in r.findings.filter(x => x.sev === 'high' || x.sev === 'medium').slice(0, 10)" :key="f.id">
-                <div class="list-group-item finding-row" @click="openFinding = openFinding === f.id ? null : f.id">
-                  <div class="d-flex gap-2 align-items-center">
-                    <span class="badge" :class="sevBadge(f.sev)" x-text="f.sev"></span>
-                    <span class="badge bg-secondary-lt" x-text="f.area"></span>
-                    <span class="flex-fill" x-text="f.title"></span>
+          <!-- timeline -->
+          <section class="ed-sec">
+            <h2 class="ed-h">When did things happen?</h2>
+            <p class="ed-sub" x-html="timelineSub()"></p>
+            <div class="ed-chart" x-html="timelineSvg()"></div>
+            <p class="ed-note" x-show="!r.timeline.length">No unified-log events yet. Install the host collector (<code>./argus.sh install-collector</code>) and give it five minutes.</p>
+          </section>
+
+          <!-- changes + attention list -->
+          <section class="ed-sec ed-two">
+            <div>
+              <h2 class="ed-h">What changed since yesterday?</h2>
+              <p class="ed-sub" x-html="changesSub()"></p>
+              <div class="ed-changes">
+                <template x-for="col in [['new', 'New'], ['changed', 'Changed'], ['resolved', 'Resolved']]" :key="col[0]">
+                  <div>
+                    <div class="ed-colhead"><span x-text="col[1]"></span> <b x-text="((r.changes && r.changes[col[0]]) || []).length"></b></div>
+                    <template x-for="(c, i) in ((r.changes && r.changes[col[0]]) || []).slice(0, 8)" :key="i">
+                      <a href="#" class="ed-change" :class="col[0] === 'resolved' && 'is-resolved'" @click.prevent="col[0] !== 'resolved' && (fQ = '', fArea = c.area, fSev = ['high','medium','low','info'], setTab('findings'), openFinding = c.id)">
+                        <i class="ed-dot" :style="'background:' + sevColor(c.sev)"></i><span x-text="c.title"></span>
+                      </a>
+                    </template>
+                    <div class="ed-none" x-show="!((r.changes && r.changes[col[0]]) || []).length">None.</div>
                   </div>
-                  <pre class="evidence" x-show="openFinding === f.id" x-text="(f.detail ? f.detail + '\n\n' : '') + f.evidence.join('\n')"></pre>
+                </template>
+              </div>
+              <a class="ed-link" href="/api/digest" target="_blank" rel="noopener">Read today's digest →</a>
+            </div>
+            <div>
+              <h2 class="ed-h">What should you look at first?</h2>
+              <p class="ed-sub">The open high and medium findings, most severe first. Acknowledge the ones you expect and they leave this list.</p>
+              <ol class="ed-list">
+                <template x-for="(f, i) in r.findings.filter(x => !x.acked && (x.sev === 'high' || x.sev === 'medium')).slice(0, 10)" :key="f.id">
+                  <li @click="fArea = f.area; fSev = ['high','medium','low','info']; setTab('findings'); openFinding = f.id">
+                    <span class="ed-num" :style="'color:' + sevColor(f.sev)" x-text="String(i + 1).padStart(2, '0')"></span>
+                    <span class="ed-area" :style="'color:' + areaColor(f.area)" x-text="f.area"></span>
+                    <span class="ed-ftitle" x-text="f.title"></span>
+                  </li>
+                </template>
+              </ol>
+              <div class="ed-none" x-show="!r.findings.some(x => !x.acked && (x.sev === 'high' || x.sev === 'medium'))">No open high or medium findings.</div>
+            </div>
+          </section>
+
+          <!-- talkers -->
+          <section class="ed-sec" x-show="talkers().length">
+            <h2 class="ed-h">Who is the Mac talking to?</h2>
+            <p class="ed-sub" x-html="talkersSub()"></p>
+            <div class="ed-chart" x-html="talkersSvg()"></div>
+          </section>
+
+          <!-- posture tiles -->
+          <section class="ed-sec">
+            <h2 class="ed-h">How is the Mac set up?</h2>
+            <p class="ed-sub" x-html="postureSub()"></p>
+            <div class="ed-tiles">
+              <template x-for="p in r.posture.filter(p => p.status !== 'pass' || showPassing)" :key="p.control">
+                <div class="ed-tile" :class="'is-' + p.status" :title="p.why || ''">
+                  <div class="ed-tname" x-text="p.control"></div>
+                  <div class="ed-tval" x-text="p.value"></div>
                 </div>
               </template>
-              <div class="list-group-item text-secondary" x-show="!r.findings.some(x => x.sev === 'high' || x.sev === 'medium')">No high or medium findings.</div>
             </div>
-          </div>
+            <a href="#" class="ed-link" x-show="r.posture.some(p => p.status === 'pass')" @click.prevent="showPassing = !showPassing" x-text="showPassing ? 'Hide the passing checks' : 'Show the ' + r.posture.filter(p => p.status === 'pass').length + ' passing checks'"></a>
+            <p class="ed-note" x-show="!r.posture.length">Waiting for the first posture snapshot from the collector.</p>
+          </section>
+
+          <footer class="ed-foot" x-text="'Argus ' + r.version + ' · ' + num(tpTotal('events')) + ' events read in 24 h · ' + num(r.intel.total || 0) + ' indicators tracked · updated ' + ago(r.generated)"></footer>
         </div>
 
         <!-- ============================================================ FINDINGS -->
@@ -181,6 +286,7 @@
                 <template x-for="a in areas()" :key="a"><option :value="a" x-text="a"></option></template>
               </select>
               <input class="form-control form-control-sm w-auto flex-fill" placeholder="Search findings and evidence" x-model.debounce.250ms="fQ">
+              <label class="form-check form-switch m-0" x-show="ackedCount()"><input class="form-check-input" type="checkbox" x-model="showAcked"><span class="form-check-label small" x-text="'Show acknowledged (' + ackedCount() + ')'"></span></label>
               <div class="ms-auto btn-list">
                 <button class="btn btn-sm" @click="csv('argus-findings', filteredFindings().map(f => ({id: f.id, severity: f.sev, area: f.area, title: f.title, count: f.count, detail: f.detail, evidence: f.evidence.join(' | ')})))"><i class="ti ti-download"></i> CSV</button>
               </div>
@@ -191,13 +297,30 @@
                   <div class="d-flex gap-2 align-items-center flex-wrap">
                     <span class="badge" :class="sevBadge(f.sev)" x-text="f.sev"></span>
                     <span class="badge bg-secondary-lt" x-text="f.area"></span>
-                    <span class="flex-fill" x-text="f.title"></span>
+                    <span class="flex-fill" :class="f.acked && 'text-secondary'" x-text="f.title"></span>
+                    <span class="badge bg-secondary-lt" x-show="f.acked">acknowledged</span>
+                    <span class="badge bg-orange-lt" x-show="f.ackChanged" title="You acknowledged this earlier; something new has appeared in its evidence">changed since acknowledged</span>
                     <span class="text-secondary small" x-text="f.source"></span>
                     <button class="btn btn-sm btn-ghost-primary" x-show="f.indicator" @click.stop="openIndicator(f.indicator.type, f.indicator.value)">Details</button>
                   </div>
                   <div x-show="openFinding === f.id">
                     <div class="text-secondary small mt-2" x-show="f.detail" x-text="f.detail"></div>
                     <pre class="evidence" x-text="f.evidence.join('\n')"></pre>
+                    <div class="d-flex gap-2 align-items-center mt-2" @click.stop>
+                      <template x-if="!f.acked">
+                        <div class="d-flex gap-2 align-items-center flex-fill">
+                          <input class="form-control form-control-sm" placeholder="Note (optional): why this is expected" x-model="ackNote" @keydown.enter="ackFinding(f)">
+                          <button class="btn btn-sm" :disabled="ackBusy" @click="ackFinding(f)"><i class="ti ti-check"></i> Acknowledge</button>
+                        </div>
+                      </template>
+                      <template x-if="f.acked">
+                        <div class="d-flex gap-2 align-items-center flex-fill small text-secondary">
+                          <span class="flex-fill" x-text="'Acknowledged ' + fmt(f.acked.at) + (f.acked.note ? ': ' + f.acked.note : '') + '. Hidden until something new shows up in its evidence.'"></span>
+                          <button class="btn btn-sm" :disabled="ackBusy" @click="ackFinding(f, true)">Un-acknowledge</button>
+                        </div>
+                      </template>
+                    </div>
+                    <div class="small text-secondary mt-1" x-show="f.ackChanged" x-text="f.ackChanged ? 'Acknowledged ' + fmt(f.ackChanged.at) + (f.ackChanged.note ? ' (' + f.ackChanged.note + ')' : '') + '; acknowledge again to hide the new state.' : ''"></div>
                   </div>
                 </div>
               </template>
@@ -768,6 +891,8 @@
                 <div class="text-secondary" x-show="r.inputs.collector.meta.version" x-text="'collector ' + r.inputs.collector.meta.version + ' · system run ' + ago((r.inputs.collector.meta.system_last_run || 0) * 1000) + ' · user run ' + ago((r.inputs.collector.meta.user_last_run || 0) * 1000)"></div></div>
               <div class="list-group-item" x-show="r.inputs.collector.hostsec"><div class="d-flex"><strong class="flex-fill">Endpoint Security (eslogger)</strong><span class="badge" :class="r.inputs.collector.hostsec && r.inputs.collector.hostsec.lastFileAt && Date.now() - r.inputs.collector.hostsec.lastFileAt < 900e3 ? 'bg-green-lt' : 'bg-orange-lt'" x-text="r.inputs.collector.hostsec && r.inputs.collector.hostsec.esSince ? (Date.now() - r.inputs.collector.hostsec.lastFileAt < 900e3 ? 'reporting' : 'stale') : 'not installed'"></span></div>
                 <div class="text-secondary" x-text="r.inputs.collector.hostsec ? num(r.inputs.collector.hostsec.esEvents) + ' events in ' + num(r.inputs.collector.hostsec.esFiles) + ' chunks · last ' + ago(r.inputs.collector.hostsec.lastFileAt) + ' · TCC.db ' + ago(r.inputs.collector.hostsec.tccDb.system) + ' · downloads ' + ago(r.inputs.collector.hostsec.quarantine) + ' · app inventory ' + ago(r.inputs.collector.hostsec.inventory) : ''"></div></div>
+              <div class="list-group-item" x-show="r.inputs.collector.hostsec && r.inputs.collector.hostsec.sigma"><div class="d-flex"><strong class="flex-fill">Sigma rules</strong><span class="badge" :class="r.inputs.collector.hostsec && r.inputs.collector.hostsec.sigma && r.inputs.collector.hostsec.sigma.error ? 'bg-red-lt' : 'bg-green-lt'" x-text="r.inputs.collector.hostsec && r.inputs.collector.hostsec.sigma ? (r.inputs.collector.hostsec.sigma.enabled ? r.inputs.collector.hostsec.sigma.rules + ' rules' : 'off') : ''"></span></div>
+                <div class="text-secondary" x-text="r.inputs.collector.hostsec && r.inputs.collector.hostsec.sigma ? 'SigmaHQ macOS process rules on Endpoint Security launches · updated ' + ago(r.inputs.collector.hostsec.sigma.updated) + ' · ' + r.inputs.collector.hostsec.sigma.skipped + ' skipped (unsupported fields or disabled)' + (r.inputs.collector.hostsec.sigma.error ? ' · ' + r.inputs.collector.hostsec.sigma.error : '') : ''"></div></div>
               <div class="list-group-item" x-show="r.inputs.collector.vulns"><div class="d-flex"><strong class="flex-fill">Vulnerability data</strong><span class="badge" :class="r.inputs.collector.vulns && (r.inputs.collector.vulns.kev.error || r.inputs.collector.vulns.apple.error) ? 'bg-red-lt' : 'bg-green-lt'" x-text="r.inputs.collector.vulns && (r.inputs.collector.vulns.kev.error || r.inputs.collector.vulns.apple.error) ? 'error' : 'ok'"></span></div>
                 <div class="text-secondary" x-text="r.inputs.collector.vulns ? 'CISA KEV ' + (r.inputs.collector.vulns.kev.error || ago(r.inputs.collector.vulns.kev.updated)) + ' · Apple releases ' + (r.inputs.collector.vulns.apple.error || ago(r.inputs.collector.vulns.apple.updated)) + ' · OSV ' + (r.inputs.collector.vulns.osv.error || ago(r.inputs.collector.vulns.osv.updated)) : ''"></div></div>
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">Pi-hole API</strong><span class="badge" :class="!r.inputs.pihole.configured ? 'bg-secondary-lt' : r.inputs.pihole.error ? 'bg-red-lt' : 'bg-green-lt'" x-text="!r.inputs.pihole.configured ? 'not configured' : r.inputs.pihole.error ? 'error' : 'ok'"></span></div>
@@ -863,7 +988,7 @@ function argus() {
     fSev: ['high', 'medium', 'low'], fArea: '', fQ: '', fLimit: 100,
     ind: { total: 0, rows: [] }, iRisk: 'flagged', iType: '', iSource: '', iQ: '', iOffset: 0,
     detail: null, lookupQ: '', lookupBusy: false, lookupErr: '',
-    hideCollector: true, showPassing: false, thirdPartyTcc: true, showScans: false,
+    hideCollector: true, showPassing: false, showAcked: false, ackNote: '', ackBusy: false, thirdPartyTcc: true, showScans: false,
     macTabs: [{ id: 'access', label: 'Access' }, { id: 'permissions', label: 'Permissions & Gatekeeper' }, { id: 'persistence', label: 'Persistence' },
       { id: 'network', label: 'Network' }, { id: 'crashes', label: 'Crashes' }, { id: 'system', label: 'System' }],
     get tabs() {
@@ -939,10 +1064,197 @@ function argus() {
     },
     toggleSev(s) { this.fSev = this.fSev.includes(s) ? this.fSev.filter(x => x !== s) : [...this.fSev, s]; },
     areas() { return this.r ? [...new Set(this.r.findings.map(f => f.area))].sort() : []; },
+    // ---------------------------------------------------------- editorial overview
+    areaColor(a) {
+      const dark = this.theme === 'dark';
+      const P = {
+        'Access': ['#c44536', '#ef7a6a'], 'Persistence': ['#3d5a80', '#7fa3d1'], 'Permissions': ['#2a8f84', '#5cc7b9'], 'Network': ['#d4892a', '#f0ae55'],
+        'Endpoint Security': ['#5c8a46', '#93c27b'], 'Vulnerabilities': ['#8d4f9a', '#c18bd0'], 'Browser': ['#b5577a', '#e08aac'], 'Posture': ['#4f6d8a', '#8fb0cc'],
+        'Gatekeeper': ['#7a3f8c', '#b884c9'], 'Devices': ['#8f6f45', '#c9a77a'], 'File integrity': ['#7f4f2e', '#c48d64'], 'Certificates': ['#3f7f7e', '#77bdbb'],
+        'Downloads': ['#c0605a', '#e8948e'], 'Threat intel': ['#a63a2e', '#e0705f'], 'Crashes': ['#6e6e6e', '#a9a9a9'], 'System': ['#6b6457', '#a59d8f'],
+        'Firewall': ['#d4892a', '#f0ae55'], 'Containers': ['#476f95', '#86aed4'], 'DNS': ['#3a7ca5', '#7cb6db'], 'CrowdSec': ['#2f6f73', '#6ab0b4'], 'Ollama': ['#6b6457', '#a59d8f'],
+      };
+      if (P[a]) return P[a][dark ? 1 : 0];
+      let h = 0; for (const c of String(a)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+      return `hsl(${h % 360} 45% ${dark ? 65 : 42}%)`;
+    },
+    sevColor(s) { return `var(--sev-${s || 'info'})`; },
+    esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); },
+    open() { return this.r ? this.r.findings.filter(f => !f.acked) : []; },
+    areaStats() {
+      const m = new Map(), w = { high: 9, medium: 3, low: 1, info: 0 };
+      for (const f of this.open()) {
+        const a = m.get(f.area) || { area: f.area, n: 0, high: 0, medium: 0, low: 0, info: 0, score: 0, top: null };
+        a.n++; a[f.sev]++; a.score += w[f.sev];
+        if (!a.top || w[f.sev] > w[a.top.sev]) a.top = f;
+        m.set(f.area, a);
+      }
+      return [...m.values()].filter(a => a.score > 0).sort((x, y) => y.score - x.score);
+    },
+    lede() {
+      if (!this.r) return '';
+      const c = this.r.counts, e = this.esc, n = v => `<b>${this.num(v)}</b>`, col = (s, v) => `<b style="color:${this.sevColor(s)}">${this.num(v)}</b>`;
+      const ev = this.tpTotal('events'), flagged = (this.r.intel.malicious || 0) + (this.r.intel.suspicious || 0);
+      const os = this.r.vulns && this.r.vulns.macos;
+      const parts = [`In the last 24 hours Argus read ${n(ev)} events (${e(this.bytes(this.tpTotal('bytes')))}) from <b>${e(this.r.host.name || 'this Mac')}</b> and your network.`];
+      if (c.high || c.medium) parts.push(`${c.high ? col('high', c.high) + ` finding${c.high === 1 ? ' needs' : 's need'} action` : 'Nothing needs urgent action'}${c.medium ? `, and ${col('medium', c.medium)} deserve${c.medium === 1 ? 's' : ''} a look` : ''}.`);
+      else parts.push('Nothing high or medium is open.');
+      parts.push(`Of ${n(this.r.intel.total || 0)} addresses and domains checked against threat intelligence, ${flagged ? col('high', flagged) + ' were flagged' : '<b>none</b> were flagged'}.`);
+      if (os && os.installed) parts.push(os.behind && os.behind.length ? `macOS ${e(os.installed)} is ${col('high', os.behind.length)} security release${os.behind.length === 1 ? '' : 's'} behind.` : `macOS ${e(os.installed)} is current.`);
+      if (this.r.findingState && this.r.findingState.acked) parts.push(`${n(this.r.findingState.acked)} acknowledged finding${this.r.findingState.acked === 1 ? ' is' : 's are'} set aside.`);
+      return parts.join(' ');
+    },
+    portraitSub() {
+      const a = this.areaStats();
+      if (!a.length) return 'Nothing open needs attention.';
+      const share = Math.round(100 * a[0].n / Math.max(1, this.open().filter(f => f.sev !== 'info').length));
+      return `<b style="color:${this.areaColor(a[0].area)}">${this.esc(a[0].area)}</b> carries the most weight right now. Each ring is that area's share of the open findings, coloured by how severe they are.`;
+    },
+    portraitText(a) {
+      const bits = [];
+      if (a.high) bits.push(`<b style="color:${this.sevColor('high')}">${a.high}</b> high`);
+      if (a.medium) bits.push(`<b style="color:${this.sevColor('medium')}">${a.medium}</b> medium`);
+      if (a.low) bits.push(`<b>${a.low}</b> low`);
+      return `${bits.join(', ')}. ${this.esc(a.top.title)}.`;
+    },
+    ringSvg(a) {
+      const total = Math.max(1, this.open().length), r = 52, C = 2 * Math.PI * r, col = this.areaColor(a.area);
+      let off = 0; const segs = [];
+      for (const s of ['high', 'medium', 'low', 'info']) {
+        if (!a[s]) continue;
+        const len = C * a[s] / total;
+        segs.push(`<circle cx="64" cy="64" r="${r}" fill="none" stroke="${this.sevColor(s)}" stroke-width="12" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 64 64)" stroke-linecap="butt"/>`);
+        off += len;
+      }
+      const icon = { 'Access': 'ti-key', 'Persistence': 'ti-repeat', 'Permissions': 'ti-lock-access', 'Network': 'ti-world', 'Endpoint Security': 'ti-cpu', 'Vulnerabilities': 'ti-bug',
+        'Browser': 'ti-browser', 'Posture': 'ti-shield-half', 'Gatekeeper': 'ti-shield-lock', 'Devices': 'ti-usb', 'File integrity': 'ti-file-diff', 'Certificates': 'ti-certificate',
+        'Downloads': 'ti-download', 'Threat intel': 'ti-fingerprint', 'Crashes': 'ti-bolt', 'System': 'ti-settings', 'Containers': 'ti-box', 'DNS': 'ti-world-search' }[a.area] || 'ti-point';
+      return `<div style="position:relative;width:128px;height:128px"><svg viewBox="0 0 128 128" width="128" height="128"><circle cx="64" cy="64" r="${r}" fill="none" stroke="var(--rule)" stroke-width="12"/>${segs.join('')}<circle cx="64" cy="64" r="40" fill="${col}" opacity=".13"/></svg>`
+        + `<i class="ti ${icon}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.4rem;color:${col}"></i>`
+        + `<div style="position:absolute;right:2px;top:2px;font:700 1rem Fraunces,Georgia,serif;color:var(--ink)">${a.n}</div></div>`;
+    },
+    tlCats() {
+      return [['auth', 'access and logins', 'Access'], ['gatekeeper', 'Gatekeeper and XProtect', 'Gatekeeper'], ['tcc', 'privacy permissions', 'Permissions'], ['firewall', 'firewall', 'Firewall'], ['background', 'login items', 'Persistence']];
+    },
+    timelineSub() {
+      const tl = (this.r && this.r.timeline) || [];
+      if (!tl.length) return 'Security-relevant events from the unified log, hour by hour.';
+      const cats = this.tlCats(), tot = x => cats.reduce((a, [k]) => a + (x[k] || 0), 0);
+      const peak = tl.reduce((a, x) => tot(x) > tot(a) ? x : a, tl[0]);
+      const dom = cats.map(([k, l, a]) => [l, a, peak[k] || 0]).sort((x, y) => y[2] - x[2])[0];
+      const legend = cats.map(([, l, a]) => `<b style="color:${this.areaColor(a)}">${l}</b>`).join(', ');
+      return `Security events from the unified log, hour by hour: ${legend}. The busiest hour was <b>${new Date(peak.t).toLocaleString([], { weekday: 'short', hour: 'numeric' })}</b> with <b>${tot(peak)}</b> events, mostly <b style="color:${this.areaColor(dom[1])}">${dom[0]}</b>.`;
+    },
+    timelineSvg() {
+      const tl = (this.r && this.r.timeline) || [];
+      if (!tl.length) return '';
+      const cats = this.tlCats(), W = 1100, H = 300, top = 18, base = 240, left = 34, right = 10;
+      const tot = x => cats.reduce((a, [k]) => a + (x[k] || 0), 0);
+      const max = Math.max(1, ...tl.map(tot));
+      const y = v => base - (base - top) * Math.sqrt(v / max);
+      const step = (W - left - right) / tl.length;
+      const out = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Security events per hour">`];
+      for (const g of [max, Math.round(max / 4)].filter((v, i, a) => v > 0 && a.indexOf(v) === i)) out.push(`<line class="axis" x1="${left}" x2="${W - right}" y1="${y(g)}" y2="${y(g)}" stroke-dasharray="3 4"/><text x="${left - 6}" y="${y(g) + 4}" text-anchor="end" font-size="11">${g}</text>`);
+      out.push(`<line class="axis" x1="${left}" x2="${W - right}" y1="${base}" y2="${base}"/>`);
+      tl.forEach((x, i) => {
+        const cx = left + step * (i + .5), present = cats.filter(([k]) => x[k] > 0);
+        const sp = Math.min(5, step / (present.length + 1));
+        present.forEach(([k, , a], j) => {
+          const xx = cx + (j - (present.length - 1) / 2) * sp, yy = y(x[k]), c = this.areaColor(a);
+          out.push(`<path d="M${xx} ${base} C ${xx} ${base - 20}, ${xx} ${yy + 20}, ${xx} ${yy}" stroke="${c}" stroke-width="2" fill="none" opacity=".85"/><circle cx="${xx}" cy="${yy}" r="${2.5 + 3 * Math.sqrt(x[k] / max)}" fill="${c}"><title>${this.esc(new Date(x.t).toLocaleString([], { weekday: 'short', hour: 'numeric' }))}: ${x[k]} ${k}</title></circle>`);
+        });
+        const d = new Date(x.t);
+        if (d.getHours() % 6 === 0) out.push(`<text x="${cx}" y="${base + 18}" text-anchor="middle" font-size="11">${d.getHours() === 0 ? this.esc(d.toLocaleDateString([], { weekday: 'short' })) : this.esc(d.toLocaleTimeString([], { hour: 'numeric' }))}</text>`);
+      });
+      out.push('</svg>');
+      return out.join('');
+    },
+    changesSub() {
+      const ch = this.r && this.r.changes;
+      if (!ch || !ch.since) return 'Comparisons start once Argus has a day of hourly snapshots.';
+      return `Compared with <b>${this.esc(new Date(ch.since).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</b>: <b>${ch.new.length}</b> new, <b>${ch.changed.length}</b> changed, <b>${ch.resolved.length}</b> resolved.`;
+    },
+    talkers() {
+      const h = this.r && this.r.hostsec;
+      if (!h) return [];
+      const sig = new Map(((h.net && h.net.programs) || []).map(p => [p.path, p]));
+      const ls = (h.littlesnitch && h.littlesnitch.available && h.littlesnitch.programs) || [];
+      const src = ls.length ? ls.map(p => ({ path: p.path, bytes: (p.bytes_in || 0) + (p.bytes_out || 0), conns: p.connects || 0, remotes: p.remotes, hosts: p.hosts || [] }))
+        : ((h.net && h.net.programs) || []).map(p => ({ path: p.path, bytes: 0, conns: p.remotes, remotes: p.remotes, hosts: p.sample || [] }));
+      const flagged = new Set(((h.dnsAttribution && h.dnsAttribution.rows) || []).flatMap(r => r.programs.map(p => p.path)));
+      return src.map(p => {
+        const s = sig.get(p.path) || {};
+        const cls = s.platform || /^\/(System|usr\/(s?bin|libexec))\//.test(p.path) ? 'Apple' : s.team ? 'Developer ID' : s.known ? 'Unsigned / ad-hoc' : 'Signer unknown';
+        return { ...p, name: (p.path.match(/([^/]+)\.app\//) || [])[1] || p.path.split('/').pop(), cls, flagged: flagged.has(p.path) || (s.flagged > 0) };
+      });
+    },
+    talkersSub() {
+      const t = this.talkers(), by = c => t.filter(x => x.cls === c).length;
+      const odd = by('Unsigned / ad-hoc'), fl = t.filter(x => x.flagged).length;
+      return `<b>${t.length}</b> programs reached the network in the last day, grouped by who signed them. Higher means more data${t.some(x => x.bytes) ? '' : ' (connections, until Little Snitch data arrives)'}. ${odd ? `<b style="color:${this.sevColor('medium')}">${odd}</b> ${odd === 1 ? 'is' : 'are'} unsigned or ad-hoc signed.` : 'None are unsigned.'} ${fl ? `<b style="color:${this.sevColor('high')}">${fl}</b> touched a flagged destination (ringed).` : ''}`;
+    },
+    talkersSvg() {
+      const t = this.talkers(); if (!t.length) return '';
+      const cols = ['Apple', 'Developer ID', 'Unsigned / ad-hoc', 'Signer unknown'].filter(c => t.some(x => x.cls === c));
+      const colColor = { 'Apple': 'var(--muted)', 'Developer ID': this.areaColor('Permissions'), 'Unsigned / ad-hoc': this.areaColor('Network'), 'Signer unknown': this.areaColor('Posture') };
+      const W = 1100, H = 420, top = 34, bot = 380, left = 46, cw = (W - left) / cols.length;
+      const val = x => Math.log10(1 + (x.bytes || x.conns || 0));
+      const max = Math.max(1, ...t.map(val));
+      const y = v => bot - (bot - top) * (v / max);
+      const out = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Programs talking to the network">`];
+      cols.forEach((c, i) => {
+        const x0 = left + cw * i, items = t.filter(x => x.cls === c).sort((a, b) => val(b) - val(a));
+        out.push(`<line class="axis" x1="${x0}" x2="${x0}" y1="${top - 10}" y2="${bot}" stroke-dasharray="2 4"/>`);
+        out.push(`<text x="${x0 + cw / 2}" y="${top - 16}" text-anchor="middle" style="font:600 14px Fraunces,Georgia,serif;font-variant:small-caps;letter-spacing:.04em;fill:${colColor[c]}">${this.esc(c)} · ${items.length}</text>`);
+        const placed = [], labels = [];
+        items.forEach(p => {
+          const yy = y(val(p)); let xx = x0 + cw / 2, k = 0;
+          const r = 4 + Math.min(6, Math.sqrt(p.remotes || 1));
+          while (placed.some(q => Math.hypot(q.x - xx, q.y - yy) < q.r + r + 3) && k < 60) { k++; xx = x0 + cw / 2 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 11; }
+          placed.push({ x: xx, y: yy, r, p });
+        });
+        const hitsDot = b => placed.some(q => q.x + q.r > b[0] && q.x - q.r < b[2] && q.y + q.r > b[1] && q.y - q.r < b[3]);
+        placed.forEach(({ x: xx, y: yy, r, p }, j) => {
+          out.push(`<circle cx="${xx}" cy="${yy}" r="${r}" fill="${colColor[c]}" opacity="${p.flagged ? 1 : .72}" ${p.flagged ? `stroke="${this.sevColor('high')}" stroke-width="3"` : ''}><title>${this.esc(p.path)}\n${p.bytes ? this.esc(this.bytes(p.bytes)) + ' · ' : ''}${p.remotes || 0} remote addresses${p.hosts.length ? '\n' + this.esc(p.hosts.slice(0, 4).join(', ')) : ''}</title></circle>`);
+          if (j < 6 || p.flagged) {
+            const label = p.name.length > 24 ? p.name.slice(0, 23) + '…' : p.name, lw = label.length * 6.2 + 4;
+            const tries = [[xx + r + 4, 'start'], [xx - r - 4, 'end']];
+            for (const [lx, anchor] of tries) {
+              const x1 = anchor === 'start' ? lx : lx - lw, box = [x1, yy - 8, x1 + lw, yy + 6];
+              if (x1 < x0 + 2 || x1 + lw > x0 + cw - 2) continue;
+              if (labels.some(b => !(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3])) || hitsDot(box)) continue;
+              labels.push(box);
+              out.push(`<text class="lbl" x="${lx}" y="${yy + 4}" text-anchor="${anchor}"${p.flagged ? ` style="fill:${this.sevColor('high')};font-weight:700"` : ''}>${this.esc(label)}</text>`);
+              break;
+            }
+          }
+        });
+      });
+      const ticks = [1e3, 1e6, 1e9].filter(b => Math.log10(1 + b) <= max);
+      if (t.some(x => x.bytes)) ticks.forEach(b => out.push(`<text x="${left - 6}" y="${y(Math.log10(1 + b)) + 4}" text-anchor="end" font-size="11">${b >= 1e9 ? '1 GB' : b >= 1e6 ? '1 MB' : '1 KB'}</text><line class="axis" x1="${left}" x2="${W}" y1="${y(Math.log10(1 + b))}" y2="${y(Math.log10(1 + b))}" stroke-dasharray="1 5"/>`));
+      out.push('</svg>');
+      return out.join('');
+    },
+    postureSub() {
+      const p = (this.r && this.r.posture) || [];
+      const f = p.filter(x => x.status === 'fail').length, w = p.filter(x => x.status === 'warn').length, ok = p.filter(x => x.status === 'pass').length;
+      if (!p.length) return 'Security settings, checked every hour.';
+      return `<b>${ok}</b> of ${p.length} checks pass. ${f ? `<b style="color:${this.sevColor('high')}">${f}</b> fail` : 'None fail'}${w ? ` and <b style="color:${this.sevColor('medium')}">${w}</b> need${w === 1 ? 's' : ''} attention` : ''}; the rest are for information.`;
+    },
+    async ackFinding(f, undo) {
+      this.ackBusy = true;
+      try {
+        const res = await fetch('/api/findings/' + (undo ? 'unack' : 'ack'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: f.id, note: this.ackNote }) });
+        if (!res.ok) throw new Error((await res.json()).error || ('HTTP ' + res.status));
+        this.ackNote = ''; this.openFinding = null; await this.load(true);
+      } catch (e) { this.error = 'Could not update the finding: ' + e.message; }
+      this.ackBusy = false;
+    },
+    ackedCount() { return this.r ? this.r.findings.filter(f => f.acked).length : 0; },
     filteredFindings() {
       if (!this.r) return [];
       const q = this.fQ.toLowerCase();
-      return this.r.findings.filter(f => this.fSev.includes(f.sev) && (!this.fArea || f.area === this.fArea) &&
+      return this.r.findings.filter(f => (this.showAcked || !f.acked) && this.fSev.includes(f.sev) && (!this.fArea || f.area === this.fArea) &&
         (!q || (f.title + ' ' + f.detail + ' ' + f.evidence.join(' ')).toLowerCase().includes(q)));
     },
     remoteAccess() {

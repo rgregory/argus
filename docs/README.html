@@ -543,7 +543,10 @@ ls -la /Users/Shared/Argus/inbox                                            # wh
 </tr>
 </tbody>
 </table>
-<p>Every five minutes Argus writes reports to <code>$ARGUS_HOME/data/reports/</code>: <code>latest.json</code>, <code>findings.csv</code>, <code>indicators.csv</code>, and one JSON file per day.</p>
+<p>Every five minutes Argus writes reports to <code>$ARGUS_HOME/data/reports/</code>: <code>latest.json</code>, <code>findings.csv</code>, <code>indicators.csv</code>, and one JSON file per day. Each morning it also writes <code>digest-YYYYMMDD.html</code>, a one-page summary of what's new, changed and resolved.</p>
+<h3 id="working-through-findings">Working through findings</h3>
+<p>Open a finding to see its evidence. If it's expected, acknowledge it, with a note if you like: it leaves the counts and lists until something new shows up in its evidence, then returns marked "changed since acknowledged". Repeats of the same thing (a later timestamp, a higher repeat count) don't bring it back. The Overview's "Changed in the last 24 hours" card lists new, changed and resolved findings, and links to the day's digest.</p>
+<p>With endpoint telemetry installed, every process launch is also checked against <a href="https://github.com/SigmaHQ/sigma">SigmaHQ</a>'s macOS process-creation rules, refreshed weekly. Rules that need fields Endpoint Security doesn't give Argus are skipped and listed under Sources &amp; feeds.</p>
 <h2 id="log-throughput">Log throughput</h2>
 <p>A Mac playing YouTube in Safari writes hundreds of unified-log entries per second. Argus only ships the security slice, which is usually well under one event per second.</p>
 <table class="table table-sm">
@@ -855,6 +858,14 @@ sudo /usr/local/libexec/argus/argus-collect.sh system &amp;&amp; \
 <tr>
 <td><code>lib/hostsec-extra2.js</code></td>
 <td>Flagged domains ↔ programs, Wi-Fi/DNS/VPN, USB and Bluetooth devices, container image scans</td>
+</tr>
+<tr>
+<td><code>lib/findings.js</code></td>
+<td>Acknowledgements, 24-hour change tracking, the daily digest</td>
+</tr>
+<tr>
+<td><code>lib/sigma.js</code></td>
+<td>Fetches and runs SigmaHQ macOS process-creation rules</td>
 </tr>
 <tr>
 <td><code>lib/vulns.js</code></td>

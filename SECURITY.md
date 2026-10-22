@@ -98,6 +98,9 @@ repository URL and installed version of each Homebrew formula** you have
 installed (one batch a day, plus detail lookups for any advisories found).
 Upgrade Homebrew to 6.0.11 or later to keep that inventory local.
 
+**Sigma rules** are fetched weekly from GitHub (`api.github.com` for the file
+list, `raw.githubusercontent.com` for the rules). Nothing is sent.
+
 **Container image scans**, if you install `grype` or `trivy`, run on the Mac
 under your account and download that scanner's vulnerability database. The
 images themselves are scanned locally; nothing about them is uploaded.
@@ -190,6 +193,8 @@ at work:
 - **Apple's security-release page** is read as a web page; Argus keeps only
   release names, versions and dates.
 - **OSV.dev** data carries per-source licenses (mostly CC-BY 4.0).
+- **Sigma rules** are under the Detection Rule License (DRL) 1.1, which asks
+  for attribution; Argus shows each matching rule's title, author and link.
 - **urlscan.io** and the other keyed providers have their own API terms tied
   to your account.
 

@@ -10,7 +10,7 @@ mkdir -p "$tmp/state" "$tmp/data" "$tmp/inbox"
 
 cd "$root/app"
 ARGUS_TOKEN="$token" ARGUS_HTTP_PORT="$port" ARGUS_STATE="$tmp/state" ARGUS_DATA="$tmp/data" \
-ARGUS_INBOX="$tmp/inbox" ARGUS_HOST_ROOT="$tmp" ARGUS_CROWDSEC=0 ARGUS_SYSLOG=0 \
+ARGUS_INBOX="$tmp/inbox" ARGUS_HOST_ROOT="$tmp" ARGUS_CROWDSEC=0 ARGUS_SYSLOG=0 ARGUS_SIGMA=0 \
 ARGUS_FEEDS_DISABLE=blocklist_de,cins,et_compromised,feodo,firehol_l1,hagezi_tif,ipsum,openphish,spamhaus_drop,threatfox,urlhaus,hagezi_nrd7,hagezi_nrd14_8,hagezi_dga14,tor_exit,dshield_block \
   node server.js > "$tmp/server.log" 2>&1 &
 pid=$!
@@ -47,6 +47,11 @@ expect 403 "POST from another website"           -X POST -H "Origin: http://evil
 expect 200 "POST from the dashboard itself"      -X POST -H "Origin: $u" -H "Cookie: argus_token=$token" "$u/api/rescan"
 expect 401 "POST without a token"                -X POST "$u/api/rescan"
 expect 401 "vulnerability refresh without a token" -X POST "$u/api/vulns/refresh"
+expect 401 "acknowledge without a token"         -X POST -H "Content-Type: application/json" -d '{"id":"x"}' "$u/api/findings/ack"
+expect 403 "acknowledge from another website"    -X POST -H "Origin: http://evil.example" -H "Cookie: argus_token=$token" -H "Content-Type: application/json" -d '{"id":"x"}' "$u/api/findings/ack"
+expect 404 "acknowledge an unknown finding"      -X POST -H "Origin: $u" -H "Cookie: argus_token=$token" -H "Content-Type: application/json" -d '{"id":"no-such-finding"}' "$u/api/findings/ack"
+expect 401 "digest without a token"              "$u/api/digest"
+expect 200 "digest with the token"               -H "Authorization: Bearer $token" "$u/api/digest"
 expect 403 "vulnerability refresh from another website" -X POST -H "Origin: http://evil.example" -H "Cookie: argus_token=$token" "$u/api/vulns/refresh"
 
 # the report carries the endpoint and vulnerability sections

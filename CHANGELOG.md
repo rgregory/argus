@@ -8,6 +8,10 @@
 - **Container image scanning.** If `grype` or `trivy` is installed, the user job scans the images your running containers use once a day. Results, with CISA KEV cross-referencing and fixable counts, are on the Vulnerabilities tab.
 - **Time Machine.** Posture shows the last backup's age (warning after 2 days, failing after 7), a missing backup destination, and automatic backups switched off.
 - **Wi-Fi, DNS and VPN.** Every 5 minutes the root job records the Wi-Fi network (`wdutil`), DNS resolvers and VPN state (Mullvad, connected VPN services or a tunnel default route). Findings for open Wi-Fi, new networks and, if you set `ARGUS_EXPECTED_DNS` / `ARGUS_EXPECT_VPN=1`, DNS going elsewhere and the VPN dropping. Current state appears in Posture.
+- **Acknowledge findings.** Open a finding, add an optional note and acknowledge it. It drops out of the counts and lists until something new appears in its evidence (timestamps and repeat counters are ignored), then comes back marked "changed since acknowledged". A switch on the Findings tab shows acknowledged ones.
+- **What changed.** The Overview shows findings that are new, changed or resolved compared with the hourly snapshot closest to 24 hours ago.
+- **Daily digest.** A self-contained HTML page with new, changed and resolved findings, open high and medium findings with evidence, and posture problems. Written each morning (`ARGUS_DIGEST_HOUR`, default 7) to `$ARGUS_HOME/data/reports/digest-YYYYMMDD.html` and `digest-latest.html`, kept 30 days, and linked from the Overview.
+- **Sigma rules.** SigmaHQ's macOS process-creation rules (about 65) are fetched weekly and run against every process launch from Endpoint Security. Matches appear as a finding naming the rule and the command line. `ARGUS_SIGMA=0` turns this off and `ARGUS_SIGMA_DISABLE` drops individual rules. Adds the `yaml` package (no dependencies) to read the rules.
 - **USB and Bluetooth devices.** Hourly `system_profiler` snapshots; new USB devices (storage rated higher) and new Bluetooth devices are reported for 7 days.
 
 ## 1.2.0 (2026-10-21)
