@@ -126,8 +126,10 @@ async function main() {
   };
   const tokenOk = t => {
     if (!cfg.http.token) return true;
-    const a = Buffer.from(String(t || '')), b = Buffer.from(cfg.http.token);
-    return a.length === b.length && crypto.timingSafeEqual(a, b);
+    // Hash inputs to fixed-length digests to perform constant-time comparison without leaking length differences
+    const a = crypto.createHash('sha256').update(String(t || '')).digest();
+    const b = crypto.createHash('sha256').update(cfg.http.token).digest();
+    return crypto.timingSafeEqual(a, b);
   };
   const cookieVal = (req, name) => {
     for (const part of String(req.headers.cookie || '').split(';')) {
