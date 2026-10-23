@@ -11,7 +11,17 @@ const { cfg } = require('./util');
 const D = 86400e3;
 const TCC_AUTH = { 0: 'denied', 1: 'unknown', 2: 'allowed', 3: 'limited' };
 
-function readInbox(rel) { try { return fs.readFileSync(path.join(cfg.inbox, rel), 'utf8'); } catch (e) { return ''; } }
+// Prevent path traversal by ensuring the target path stays within cfg.inbox
+function readInbox(rel) {
+  try {
+    const base = path.resolve(cfg.inbox);
+    const target = path.resolve(base, rel);
+    if (!target.startsWith(base + path.sep) && target !== base) return '';
+    return fs.readFileSync(target, 'utf8');
+  } catch (e) {
+    return '';
+  }
+}
 
 // Paths and names the dossier can be opened for, for the search box.
 function searchPrograms(hs, q, limit = 40) {
