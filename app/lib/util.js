@@ -19,6 +19,11 @@ const cfg = {
   pihole: { url: env('PIHOLE_URL', '').replace(/\/+$/, ''), password: env('PIHOLE_PASSWORD', ''), every: +env('PIHOLE_POLL_SECONDS', 120) * 1000 },
   intelowl: { url: env('INTELOWL_URL', '').replace(/\/+$/, ''), token: env('INTELOWL_TOKEN', ''), playbook: env('INTELOWL_PLAYBOOK', 'FREE_TO_USE_ANALYZERS'),
     publicUrl: env('INTELOWL_PUBLIC_URL', '').replace(/\/+$/, ''), auto: flag('INTELOWL_AUTO', true), dailyLimit: +env('INTELOWL_DAILY_LIMIT', 50) },
+  // Local MISP (../mist). TLS is pinned to MIST's self-signed cert (copied to /data/config by argus.sh);
+  // the cert is issued for "localhost", so that is the name checked even though we connect by IP.
+  misp: { url: env('MISP_URL', '').replace(/\/+$/, ''), key: env('MISP_KEY', ''), caFile: env('MISP_CA_FILE', '/data/config/misp-ca.pem'),
+    tlsName: env('MISP_TLS_NAME', 'localhost'), publicUrl: env('MISP_PUBLIC_URL', '').replace(/\/+$/, ''),
+    auto: flag('MISP_AUTO', true), dailyLimit: +env('MISP_DAILY_LIMIT', 5000), minPriority: +env('MISP_MIN_PRIORITY', 0) },
   keys: {
     abusech: env('ABUSECH_AUTH_KEY', ''), crowdsecCti: env('CROWDSEC_CTI_KEY', ''), abuseipdb: env('ABUSEIPDB_KEY', ''),
     virustotal: env('VT_API_KEY', ''), otx: env('OTX_API_KEY', ''), greynoise: env('GREYNOISE_KEY', ''), urlscan: env('URLSCAN_API_KEY', ''),

@@ -295,6 +295,8 @@ Every public IP address and domain Argus comes across becomes an indicator. They
 | DShield top attacking /24s | none | non-commercial license, see [SECURITY.md](SECURITY.md#data-source-terms) |
 | CrowdSec community blocklist | none | read from the local API with the `argus` bouncer key |
 
+**MISP.** If the MIST stack (`~/sync/containers/mist`) is running, `argus.sh up` finds `mist-nginx`, joins the `mist` network, copies MIST's self-signed certificate to `data/config/misp-ca.pem` and pins TLS to it. Create a key with `~/sync/containers/mist/mist.sh apikey argus` (it writes `MISP_KEY` into `argus.env`), then `./argus.sh update`. Every indicator is checked against your MISP attributes (`/attributes/restSearch`): IDS-flagged hits count as malicious, others as suspicious, and a MISP hit is an independent source for the two-source rule. Load and fetch feeds in MISP for this to be useful.
+
 The optional keys go in `argus.env`: `ABUSECH_AUTH_KEY`, `CROWDSEC_CTI_KEY`, `ABUSEIPDB_KEY`, `VT_API_KEY`, `OTX_API_KEY`, `GREYNOISE_KEY` and `URLSCAN_API_KEY`. A provider without a key stays off, and daily caps keep you inside the free tiers. You can add your own feeds in `$ARGUS_HOME/data/config/feeds.json`:
 
 ```json

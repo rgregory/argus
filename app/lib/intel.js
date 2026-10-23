@@ -2,6 +2,9 @@
 // Indicators (IPs, domains) seen anywhere, matched against feeds and CrowdSec,
 // enriched with OSINT providers, and scored.
 const dns = require('node:dns').promises;
+const fs = require('node:fs');
+const http = require('node:http');
+const https = require('node:https');
 const engine = require('./engine');
 const { cfg, env, logger, fetchJson, classifyValue, dayKey, ipv4ToInt, cidrRange } = require('./util');
 
@@ -128,6 +131,9 @@ function providers(self) {
         return { verdict: age !== null && age < 30 ? 'suspicious' : 'info', score: age !== null && age < 30 ? 40 : 0,
           summary: `${certs.length} certificates for ${base}; first issued ${age === null ? '?' : age + ' d ago'}; issuers ${issuers.join(', ')}`, link: `https://crt.sh/?q=${encodeURIComponent(base)}` };
       } },
+    { id: 'misp', name: 'MISP (local)', types: ['ip', 'domain'], ttl: 1 * D, daily: cfg.misp.dailyLimit, gap: 250,
+      minPriority: cfg.misp.auto ? cfg.misp.minPriority : 99, enabled: () => !!(cfg.misp.url && cfg.misp.key),
+      run: (v, t) => self.misp(v, t) },
     { id: 'intelowl', name: 'IntelOwl', types: ['ip', 'domain'], ttl: 3 * D, daily: cfg.intelowl.dailyLimit, gap: 3000, minPriority: cfg.intelowl.auto ? 3 : 99, enabled: () => !!(cfg.intelowl.url && cfg.intelowl.token),
       run: (v, t) => self.intelowl(v, t) },
   ];
@@ -520,6 +526,55 @@ class Intel {
       ON CONFLICT(value, type, provider) DO UPDATE SET fetched_at = excluded.fetched_at, verdict = excluded.verdict, score = excluded.score, summary = excluded.summary, link = excluded.link`,
       base, Date.now(), res.verdict, res.score || 0, res.summary, res.link || '');
     return res;
+  }
+
+  // POST to MISP's REST API. Uses node:https directly so the self-signed MIST cert can be pinned (ca + servername)
+  // instead of disabling verification.
+  mispRequest(path, body) {
+    const m = cfg.misp, u = new URL(m.url + path), tls = u.protocol === 'https:';
+    if (tls && this.mispCa === undefined) { try { this.mispCa = fs.readFileSync(m.caFile); } catch (e) { this.mispCa = null; } }
+    const data = JSON.stringify(body);
+    return new Promise((resolve, reject) => {
+      const req = (tls ? https : http).request({ hostname: u.hostname, port: u.port || (tls ? 443 : 80), path: u.pathname + u.search, method: 'POST',
+        ...(tls ? { servername: m.tlsName, ca: this.mispCa || undefined } : {}), timeout: 20000,
+        headers: { Authorization: m.key, Accept: 'application/json', 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'User-Agent': `argus/${cfg.version}` } }, res => {
+        let text = ''; res.setEncoding('utf8');
+        res.on('data', c => { text += c; if (text.length > 4e6) req.destroy(new Error('MISP response too large')); });
+        res.on('end', () => { let json = null; try { json = JSON.parse(text); } catch (e) { /* not JSON */ }
+          resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, json, text }); });
+      });
+      req.on('timeout', () => req.destroy(new Error('MISP timeout')));
+      req.on('error', e => reject(new Error(/self.signed|unable to verify|altname/i.test(e.message)
+        ? `MISP TLS: ${e.message} (is ${m.caFile} the MIST cert? re-run ./argus.sh up)` : `MISP: ${e.message}`)));
+      req.end(data);
+    });
+  }
+
+  async misp(value, type) {
+    const m = cfg.misp;
+    const types = type === 'ip' ? ['ip-src', 'ip-dst', 'ip-src|port', 'ip-dst|port', 'domain|ip']
+      : ['domain', 'hostname', 'domain|ip'];
+    const r = await this.mispRequest('/attributes/restSearch', { returnFormat: 'json', value, type: types, limit: 100,
+      includeEventTags: true, deleted: false, includeDecayScore: false });
+    if (r.status === 403 || r.status === 401) throw new Error(`MISP HTTP ${r.status}: check MISP_KEY`);
+    if (!r.ok || !r.json) throw new Error(`MISP HTTP ${r.status}${r.text ? ': ' + r.text.slice(0, 120) : ''}`);
+    const attrs = (r.json.response && r.json.response.Attribute) || [];
+    const pub = m.publicUrl || m.url;
+    if (!attrs.length) return { verdict: 'clean', summary: 'not in MISP', link: `${pub}/attributes/index` };
+    const events = new Map();
+    for (const a of attrs) if (a.Event) events.set(a.Event.id, a.Event);
+    const ids = attrs.filter(a => a.to_ids === true || a.to_ids === '1' || a.to_ids === 1);
+    const high = [...events.values()].some(e => +e.threat_level_id === 1);
+    const tags = [...new Set(attrs.flatMap(a => (a.Tag || []).concat((a.Event && a.Event.Tag) || []).map(t => t.name)))]
+      .filter(t => !/^(tlp|workflow|misp-galaxy:mitre-attack-pattern)/i.test(t)).slice(0, 5);
+    const verdict = ids.length ? 'malicious' : 'suspicious';
+    const score = ids.length ? (high ? 90 : 80) : 50;
+    const infos = [...events.values()].slice(0, 3).map(e => String(e.info || '').slice(0, 60)).join('; ');
+    const one = events.size === 1 ? [...events.keys()][0] : null;
+    return { verdict, score,
+      summary: `${attrs.length} attribute(s) in ${events.size} event(s), ${ids.length} marked IDS${infos ? ': ' + infos : ''}${tags.length ? ' [' + tags.join(', ') + ']' : ''}`,
+      link: one ? `${pub}/events/view/${one}` : `${pub}/events/index/searchall:${encodeURIComponent(value)}`,
+      data: { events: [...events.values()].map(e => ({ id: e.id, info: e.info, threat_level_id: e.threat_level_id })).slice(0, 20) } };
   }
 
   async intelowl(value, type) {

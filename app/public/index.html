@@ -262,6 +262,22 @@
   .ed .page-body, .page-body:has(.ed) { margin-top: .5rem; }
   .ed-ring > div, .ed-ring svg { width: 112px !important; height: 112px !important; }
   @media (max-width: 760px) { .ed-stats { grid-template-columns: repeat(3, 1fr); } .ed-tabs { flex-wrap: wrap !important; } }
+
+  /* tighter */
+  .ed-mast2 { grid-template-columns: 190px 1fr; gap: 2rem; padding-top: .3rem; }
+  .ed-clock svg { width: 190px; height: 190px; }
+  .ed-mast2 .ed-title { font-size: clamp(1.6rem, 2.9vw, 2.25rem); margin: .15rem 0 .45rem; }
+  .ed-lede { font-size: clamp(1rem, 1.35vw, 1.1rem); line-height: 1.5; }
+  .ed-context { margin-top: .45rem; font-size: .88rem; }
+  .ed-stats { margin: .9rem 0 0; }
+  .ed-stat { padding: .4rem .4rem .35rem; }
+  .ed-stat-v { font-size: clamp(1.5rem, 2.6vw, 1.9rem); }
+  .ed-stat-l { margin-top: .2rem; font-size: .85rem; }
+  .ed-sec { margin-top: 1.5rem; }
+  .ed-h { font-size: clamp(1.25rem, 2vw, 1.55rem); }
+  .ed-sub { margin: .2rem auto .8rem; font-size: .96rem; line-height: 1.45; max-width: 46rem; }
+  .ed-portraits { gap: 1rem .8rem; }
+  .ed-ring, .ed-ring > div, .ed-ring svg { width: 100px !important; height: 100px !important; }
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
@@ -365,6 +381,13 @@
             </template>
           </div>
 
+          <!-- talkers -->
+          <section class="ed-sec" x-show="talkers().length">
+            <h2 class="ed-h">Who is the Mac talking to?</h2>
+            <p class="ed-sub" x-html="talkersSub()"></p>
+            <div class="ed-chart" x-html="talkersSvg()" @click="dosClick($event)"></div>
+          </section>
+
           <!-- portraits -->
           <section class="ed-sec">
             <h2 class="ed-h">Where is the attention needed?</h2>
@@ -379,13 +402,6 @@
               </template>
               <div class="ed-empty" x-show="!areaStats().length">Nothing open. Every finding is either resolved or acknowledged.</div>
             </div>
-          </section>
-
-          <!-- talkers -->
-          <section class="ed-sec" x-show="talkers().length">
-            <h2 class="ed-h">Who is the Mac talking to?</h2>
-            <p class="ed-sub" x-html="talkersSub()"></p>
-            <div class="ed-chart" x-html="talkersSvg()" @click="dosClick($event)"></div>
           </section>
 
           <!-- timeline -->
@@ -1177,6 +1193,8 @@
                 <div class="text-secondary" x-text="r.inputs.collector.vulns ? 'CISA KEV ' + (r.inputs.collector.vulns.kev.error || ago(r.inputs.collector.vulns.kev.updated)) + ' · Apple releases ' + (r.inputs.collector.vulns.apple.error || ago(r.inputs.collector.vulns.apple.updated)) + ' · OSV ' + (r.inputs.collector.vulns.osv.error || ago(r.inputs.collector.vulns.osv.updated)) : ''"></div></div>
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">Pi-hole API</strong><span class="badge" :class="!r.inputs.pihole.configured ? 'bg-secondary-lt' : r.inputs.pihole.error ? 'bg-red-lt' : 'bg-green-lt'" x-text="!r.inputs.pihole.configured ? 'not configured' : r.inputs.pihole.error ? 'error' : 'ok'"></span></div>
                 <div class="text-secondary" x-text="r.inputs.pihole.configured ? (r.inputs.pihole.url + ' · polled ' + ago(r.inputs.pihole.lastPoll) + (r.inputs.pihole.error ? ' · ' + r.inputs.pihole.error : '')) : 'Set PIHOLE_URL and PIHOLE_PASSWORD'"></div></div>
+              <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">MISP</strong><span class="badge" :class="r.inputs.misp && r.inputs.misp.configured ? 'bg-green-lt' : 'bg-secondary-lt'" x-text="r.inputs.misp && r.inputs.misp.configured ? 'configured' : 'not configured'"></span></div>
+                <div class="text-secondary" x-text="r.inputs.misp && r.inputs.misp.configured ? r.inputs.misp.url + (r.inputs.misp.auto ? ' · checks every indicator against local events and feeds' : ' · manual lookups only') : 'Start ../mist, run ./mist.sh apikey argus, then ./argus.sh up'"></div></div>
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">IntelOwl</strong><span class="badge" :class="r.inputs.intelowl.configured ? 'bg-green-lt' : 'bg-secondary-lt'" x-text="r.inputs.intelowl.configured ? 'configured' : 'not configured'"></span></div>
                 <div class="text-secondary" x-text="r.inputs.intelowl.configured ? r.inputs.intelowl.url + ' · playbook ' + r.inputs.intelowl.playbook + ' (runs on flagged indicators and manual lookups)' : 'Set INTELOWL_URL and INTELOWL_TOKEN'"></div></div>
               <div class="list-group-item" x-show="r.asn"><div class="d-flex"><strong class="flex-fill">IP owners (ASN table)</strong><span class="badge" :class="!r.asn.enabled ? 'bg-secondary-lt' : r.asn.ranges ? 'bg-green-lt' : 'bg-orange-lt'" x-text="!r.asn.enabled ? 'off' : r.asn.ranges ? 'ok' : 'not loaded'"></span></div>
@@ -1184,11 +1202,15 @@
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">CrowdSec</strong><span class="badge" :class="r.crowdsec.error ? 'bg-red-lt' : 'bg-green-lt'" x-text="r.crowdsec.error ? 'error' : 'ok'"></span></div>
                 <div class="text-secondary" x-text="num(r.crowdsec.decisions) + ' decisions · ' + (r.crowdsec.error || 'stream synced ' + ago(r.crowdsec.lastStream))"></div></div>
             </div></div></div>
-          <div class="col-lg-6"><div class="card">
+          <div class="col-lg-6"><div class="card" x-data="provSort()">
             <div class="card-header"><h3 class="card-title">OSINT providers</h3></div>
-            <div class="table-responsive"><table class="table table-sm card-table"><thead><tr><th>Provider</th><th>Mode</th><th class="text-end">Today</th><th>Status</th></tr></thead>
-              <tbody><template x-for="p in r.providers" :key="p.id"><tr><td><span x-text="p.name"></span> <span class="text-secondary small" x-text="p.types.join('/')"></span></td>
-                <td class="small" x-text="!p.enabled ? 'off (no key)' : p.auto ? (p.minPriority >= 3 ? 'auto: flagged only' : p.minPriority >= 2 ? 'auto: high priority' : 'auto') : 'manual lookups'"></td>
+            <div class="table-responsive"><table class="table table-sm card-table"><thead><tr>
+              <th class="sortable" @click="by('name')">Provider <i class="ti" :class="arrow('name')"></i></th>
+              <th class="sortable" @click="by('mode')">Mode <i class="ti" :class="arrow('mode')"></i></th>
+              <th class="sortable text-end" @click="by('today')">Today <i class="ti" :class="arrow('today')"></i></th>
+              <th class="sortable" @click="by('status')">Status <i class="ti" :class="arrow('status')"></i></th></tr></thead>
+              <tbody><template x-for="p in rows(r.providers)" :key="p.id"><tr><td><span x-text="p.name"></span> <span class="text-secondary small" x-text="p.types.join('/')"></span></td>
+                <td class="small" x-text="modeLabel(p)"></td>
                 <td class="text-end small" x-text="p.callsToday + ' / ' + p.daily"></td><td class="small" :class="p.error && 'text-red'" x-text="p.error ? p.error + ' (' + ago(p.errorAt) + ')' : (p.enabled ? 'ok' : '')"></td></tr></template></tbody></table></div></div></div>
           <div class="col-12"><div class="card">
             <div class="card-header"><h3 class="card-title">Threat feeds</h3><div class="card-actions"><button class="btn btn-sm" @click="refreshFeeds()"><i class="ti ti-refresh"></i> Refresh all</button></div></div>
@@ -1838,7 +1860,7 @@ function argus() {
     },
     talkersSub() {
       const t = this.talkers(), odd = t.filter(x => x.cls === 'Unsigned / ad-hoc').length, fl = t.filter(x => x.flagged).length;
-      return `<b>${t.length}</b> programs with network traffic, last 24 h, grouped by signer; click a dot for its dossier. Y axis: ${t.some(x => x.bytes) ? 'bytes transferred (log)' : 'connections (log; bytes once Little Snitch data arrives)'}. Unsigned or ad-hoc: <b style="color:${odd ? this.sevColor('medium') : 'inherit'}">${odd}</b>.${fl ? ` Contacted flagged destinations: <b style="color:${this.sevColor('high')}">${fl}</b> (ringed).` : ''}`;
+      return `<b>${t.length}</b> programs with traffic in 24 h, by signer; height is ${t.some(x => x.bytes) ? 'bytes' : 'connections'} (log). Unsigned: <b style="color:${odd ? this.sevColor('medium') : 'inherit'}">${odd}</b>.${fl ? ` Ringed: <b style="color:${this.sevColor('high')}">${fl}</b> contacted flagged destinations.` : ''} Click a dot for its dossier.`;
     },
     talkersSvg() {
       const t = this.talkers(); if (!t.length) return '';
@@ -2098,5 +2120,30 @@ function argus() {
   };
 }
 </script>
+<script>
+// OSINT providers table: click a header to sort, click again to reverse. Choice remembered per browser.
+function provSort() {
+  let saved = {}; try { saved = JSON.parse(localStorage.getItem('argus.provSort') || '{}'); } catch (e) { /* storage off */ }
+  return {
+    key: saved.key || 'mode', dir: saved.dir || 1,
+    modeLabel(p) { return !p.enabled ? 'off (no key)' : p.auto ? (p.minPriority >= 3 ? 'auto: flagged only' : p.minPriority >= 2 ? 'auto: high priority' : 'auto') : 'manual lookups'; },
+    modeRank(p) { return !p.enabled ? 4 : !p.auto ? 3 : p.minPriority >= 3 ? 2 : p.minPriority >= 2 ? 1 : 0; },
+    val(p) {
+      if (this.key === 'mode') return this.modeRank(p);
+      if (this.key === 'today') return p.callsToday / Math.max(1, p.daily);
+      if (this.key === 'status') return p.error ? 0 : p.enabled ? 1 : 2;   // errors first, then ok, then off
+      return p.name.toLowerCase();
+    },
+    rows(list) {
+      return [...(list || [])].sort((a, b) => { const x = this.val(a), y = this.val(b);
+        return (x < y ? -1 : x > y ? 1 : a.name.localeCompare(b.name)) * (x === y ? 1 : this.dir); });
+    },
+    by(k) { this.dir = this.key === k ? -this.dir : (k === 'today' ? -1 : 1); this.key = k;
+      try { localStorage.setItem('argus.provSort', JSON.stringify({ key: this.key, dir: this.dir })); } catch (e) { /* storage off */ } },
+    arrow(k) { return this.key !== k ? 'ti-selector text-secondary' : this.dir > 0 ? 'ti-chevron-up' : 'ti-chevron-down'; },
+  };
+}
+</script>
+<style>th.sortable { cursor: pointer; user-select: none; white-space: nowrap; } th.sortable .ti { font-size: .85em; vertical-align: -1px; }</style>
 </body>
 </html>

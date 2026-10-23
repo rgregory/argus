@@ -298,7 +298,7 @@ write_runtime_env() {
   # Every other key (API keys included) passes straight into --env-file, so strip wrapping
   # quotes here too - see strip_quotes above.
   grep -vE '^[[:space:]]*(#|$)' "$ENV_FILE" \
-    | grep -vE '^(TZ|ARGUS_MAC_HOST|PIHOLE_URL|INTELOWL_URL|ARGUS_INBOX)=' \
+    | grep -vE '^(TZ|ARGUS_MAC_HOST|PIHOLE_URL|INTELOWL_URL|ARGUS_INBOX|MISP_URL|MISP_PUBLIC_URL|MIST_HOME)=' \
     | sed -E 's/^([A-Za-z_][A-Za-z0-9_]*)="(.*)"$/\1=\2/' \
     | sed -E "s/^([A-Za-z_][A-Za-z0-9_]*)='(.*)'\$/\1=\2/" \
     > "$RUNTIME_ENV"
@@ -315,7 +315,24 @@ write_runtime_env() {
   # works if IntelOwl's own containers are already on the same network as Argus (default,
   # below). Set INTELOWL_URL in argus.env explicitly once you've confirmed that.
   intelowl_url="$(env_val INTELOWL_URL)"
+  # MISP (../mist): auto-detect mist-nginx, join the 'mist' network, pin MIST's self-signed cert.
+  local misp_url misp_pub mist_home
+  misp_url="$(env_val MISP_URL)"; misp_pub="$(env_val MISP_PUBLIC_URL)"
+  mist_home="$(env_val MIST_HOME "$HOME/sync/containers/mist")"
+  ATTACH_MISP=0
+  if [ -z "$misp_url" ] && running mist-nginx; then
+    ip="$(container_ip mist-nginx)"
+    if [ -n "$ip" ]; then misp_url="https://$ip:8443"; ATTACH_MISP=1; ok "MISP: mist-nginx at $misp_url (joining network 'mist')"; fi
+  fi
+  if [ -n "$misp_url" ]; then
+    if [ -s "$mist_home/ssl/cert.pem" ]; then cp "$mist_home/ssl/cert.pem" "$DATA_DIR/config/misp-ca.pem"; chmod 644 "$DATA_DIR/config/misp-ca.pem"
+    else warn "MISP: no $mist_home/ssl/cert.pem to pin; TLS to MISP will fail"; fi
+    [ -n "$misp_pub" ] || misp_pub="$(grep -E '^HTTPS_PORT=' "$mist_home/.env" 2>/dev/null | cut -d= -f2 | sed 's#^#https://localhost:#')"
+    [ -n "$(env_val MISP_KEY)" ] || warn "MISP: MISP_KEY is blank — run $mist_home/mist.sh apikey argus"
+  fi
   {
+    echo "MISP_URL=$misp_url"
+    echo "MISP_PUBLIC_URL=${misp_pub:-https://localhost:8443}"
     echo "TZ=$(host_tz)"
     echo "ARGUS_MAC_HOST=$(scutil --get LocalHostName 2>/dev/null || hostname -s)"
     echo "PIHOLE_URL=$pihole_url"
@@ -351,6 +368,7 @@ cmd_up() {
     --volume "argus-cs-data:/var/lib/crowdsec/data"
     --cap-drop NET_RAW --cap-drop MKNOD --cap-drop SYS_CHROOT --cap-drop AUDIT_WRITE --cap-drop SETFCAP
     -p "127.0.0.1:${port}:7080")
+  [ "${ATTACH_MISP:-0}" = "1" ] && args+=(--network mist)
   local d
   for d in $(env_val ARGUS_DNS); do args+=(--dns "$d"); done
   if [ "$(env_val ARGUS_MOUNT_HOST_LOGS 1)" = "1" ]; then

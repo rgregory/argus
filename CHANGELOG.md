@@ -4,6 +4,8 @@
 
 ### Added
 
+- **MISP (local MIST stack).** Every indicator is checked against your MISP instance's attributes; IDS-flagged hits score malicious, others suspicious. `argus.sh up` finds `mist-nginx`, joins its network and pins MIST's self-signed certificate; `mist.sh apikey argus` writes the key. Listed under Sources & feeds.
+- **Sortable OSINT providers table** on Sources & feeds (click a column; the choice is remembered).
 - **One source isn't enough.** An outbound indicator flagged by a single reputation source (one OSINT provider, or one medium/low feed) is shown as low until an independent source agrees; the finding names the source. High-severity feeds, CrowdSec local detections and inbound activity keep their severity. `ARGUS_MIN_SOURCES=1` turns it off. Acknowledgements made before still hold.
 - **`./argus.sh update` and `rollback`.** `update` keeps the running image as `argus:prev`, builds, restarts and waits for the dashboard; if it doesn't answer, it goes back to the previous image by itself and shows the last log lines. `rollback` switches to the previous image by hand.
 - **Triage backups.** Acknowledgements and the allow list are written nightly to `data/backups/triage-YYYYMMDD.json` (14 kept, `ARGUS_BACKUP_KEEP`). `./argus.sh backup` writes one now; `./argus.sh restore [file]` merges one back in (missing entries added, newer ones win, nothing removed).
