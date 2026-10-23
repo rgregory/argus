@@ -142,6 +142,9 @@
   .ed-stats { display: grid; grid-template-columns: repeat(6, 1fr); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); margin: 2rem 0 .5rem; }
   .ed-stat { padding: .9rem .4rem .8rem; text-align: center; border-left: 1px solid var(--rule); }
   .ed-stat:first-of-type { border-left: 0; }
+  a.ed-stat { display: block; color: inherit; text-decoration: none; cursor: pointer; transition: background .15s; }
+  a.ed-stat:hover, a.ed-stat:focus-visible { background: var(--field); color: inherit; text-decoration: none; }
+  a.ed-stat:hover .ed-stat-l { color: var(--ink); }
   .ed-stat-v { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: clamp(1.8rem, 3.6vw, 2.8rem); line-height: 1; font-variant-numeric: lining-nums; font-variation-settings: "opsz" 144; }
   .ed-stat-l { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .07em; color: var(--muted); font-size: .88rem; margin-top: .35rem; }
   .ed-stat-u { opacity: .75; }
@@ -374,10 +377,10 @@
           </header>
           <div class="ed-stats">
             <template x-for="s in mastStats()" :key="s.label">
-              <div class="ed-stat">
+              <a href="#" class="ed-stat" :title="s.hint" @click.prevent="s.go()">
                 <div class="ed-stat-v" :style="s.color ? 'color:' + s.color : ''" x-text="s.value"></div>
                 <div class="ed-stat-l"><span x-text="s.label"></span> <span class="ed-stat-u" x-text="s.unit || ''"></span></div>
-              </div>
+              </a>
             </template>
           </div>
 
@@ -1626,10 +1629,12 @@ function argus() {
       const c = this.r.counts, fl = this.r.intel.flags, flagged = fl ? fl.high + fl.medium : (this.r.intel.malicious || 0) + (this.r.intel.suspicious || 0), aside = fl ? fl.low + fl.allowed : 0;
       const big = v => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : this.num(v);
       const b = this.bytes(this.tpTotal('bytes')).split(' ');
+      const sev = v => () => { this.fQ = ''; this.fArea = ''; this.fSev = [v]; this.setTab('findings'); };
       return [
-        { label: 'High', value: c.high || 0, color: c.high ? this.sevColor('high') : '', unit: 'open' },
-        { label: 'Medium', value: c.medium || 0, color: c.medium ? this.sevColor('medium') : '', unit: 'open' },
-        { label: 'Flagged', value: flagged, color: flagged ? this.sevColor('high') : '', unit: aside ? `+${big(aside)} set aside` : '' },
+        { label: 'High', value: c.high || 0, color: c.high ? this.sevColor('high') : '', unit: 'open', hint: 'Show open high findings', go: sev('high') },
+        { label: 'Medium', value: c.medium || 0, color: c.medium ? this.sevColor('medium') : '', unit: 'open', hint: 'Show open medium findings', go: sev('medium') },
+        { label: 'Flagged', value: flagged, color: flagged ? this.sevColor('high') : '', unit: aside ? `+${big(aside)} set aside` : '', hint: 'Show flagged indicators (malicious + suspicious)',
+          go: () => { this.iRisk = 'flagged'; this.iType = ''; this.iSource = ''; this.iQ = ''; this.iOffset = 0; this.setTab('indicators'); } },
       ];
     },
     // The numbers the stat strip used to carry, as one quiet line under the lede.
