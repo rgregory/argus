@@ -24,7 +24,7 @@ function analyzeDnsAttribution(hs, add) {
   let have; try { have = hs.store.get("SELECT 1 FROM ls_flows LIMIT 1"); } catch (e) { return { available: false, why: 'needs Little Snitch' }; }
   if (!have) return { available: false, why: 'needs Little Snitch' };
   const flagged = hs.store.all("SELECT value, risk, risk_score, reasons, sources FROM observables WHERE type = 'domain' AND risk_score >= 40 ORDER BY risk_score DESC LIMIT 300")
-    .filter(d => !(hs.intel && hs.intel.allowedBy(d.value, 'domain')));
+    .filter(d => !hs.intel || hs.intel.flaggedFor(d.value, 'domain', hs));   // after the allow list and the two-source rule
   const since = Date.now() - KEEP;
   const rows = [];
   for (const d of flagged) {

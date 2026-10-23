@@ -11,6 +11,7 @@ const { Feeds } = require('./lib/feeds');
 const { CrowdSec } = require('./lib/crowdsec');
 const { Intel } = require('./lib/intel');
 const { Asn } = require('./lib/asn');
+const triage = require('./lib/triage');
 const { Throughput } = require('./lib/throughput');
 const { MacIngest, SyslogTail, PiHole } = require('./lib/ingest');
 const { FindingState } = require('./lib/findings');
@@ -75,7 +76,7 @@ function buildReport() {
     window: { from: m.meta.minTs, to: m.meta.maxTs, events: m.meta.events, hours: cfg.windowHours },
     macos: { access: m.access, protect: m.protect, persistence: m.persistence, network: m.network, crashes: m.crashes, system: m.system, containers: m.containers, ollama: m.ollama, files: m.files.slice(-200) },
     dns: mac.dnsReport ? mac.dnsReport.dns : null,
-    intel: intel.counts(),
+    intel: { ...intel.counts(), flags: intel.flagSummary(mac.hostsec) },
     crowdsec: cs.status(),
     feeds: feeds.status(), asn: asn.status(), providers: intel.providerStatus(),
     syslog: syslog.status(),
@@ -114,6 +115,7 @@ async function main() {
   every('crowdsec', 60e3, () => cs.poll(), log);
   every('feeds', 10 * 60e3, () => feeds.refresh(false), log);
   every('asn', 6 * 3600e3, () => asn.refresh(false), log);
+  every('triage-backup', 30 * 60e3, async () => triage.nightly(store), log);
   every('intel', cfg.osint.autoEvery, () => intel.tick(), log);
   every('report', 60e3, async () => { buildReport(); await alerts.process(report); }, log);
   every('export', 5 * 60e3, async () => { exportFiles(); }, log);
@@ -205,6 +207,16 @@ async function main() {
     const d = intel.detail(String(req.params.value).toLowerCase(), req.params.type);
     if (!d) return res.status(404).json({ error: 'not found' });
     res.json(d);
+  });
+  app.get('/api/triage/backups', (req, res) => res.json(triage.list()));
+  app.post('/api/triage/backup', (req, res) => {
+    const t = new Date(), p = n => String(n).padStart(2, '0');
+    try { res.json({ ok: true, file: require('node:path').basename(triage.write(store, `triage-${t.getFullYear()}${p(t.getMonth() + 1)}${p(t.getDate())}-${p(t.getHours())}${p(t.getMinutes())}${p(t.getSeconds())}.json`)) }); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  app.post('/api/triage/restore', (req, res) => {
+    try { const r = triage.restore(store, intel, req.body && req.body.file); buildReport(); res.json({ ok: true, ...r }); }
+    catch (e) { res.status(400).json({ error: e.message }); }
   });
   app.get('/api/allow', (req, res) => res.json(intel.allowEntries()));
   app.post('/api/allow', (req, res) => {

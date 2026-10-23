@@ -118,9 +118,13 @@ images themselves are scanned locally; nothing about them is uploaded.
 keep CrowdSec fully offline (parsers/scenarios already installed keep
 working; you lose hub auto-updates and community blocklist sync).
 
-**IP owner table**: once a week Argus downloads `ip2asn-v4.tsv.gz` from
-`iptoasn.com` (about 7 MB). Nothing is sent with the request, and owner
+**IP owner tables**: once a week Argus downloads `ip2asn-v4.tsv.gz` and
+`ip2asn-v6.tsv.gz` from `iptoasn.com` (about 10 MB together). Nothing is sent with the request, and owner
 lookups run locally against that copy. `ARGUS_ASN=0` stops the download.
+
+**Triage backups** (`data/backups/triage-*.json`) hold finding titles, your
+notes and allow-list entries. They sit in `$ARGUS_HOME`, so if that folder is
+synced, they're synced too.
 
 **Indicator enrichment is where your own data goes out**, and only for
 indicators Argus has observed (public IPs, domains, SSH/Screen

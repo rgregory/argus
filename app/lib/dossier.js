@@ -69,7 +69,16 @@ function dossier(hs, report, p) {
   let sockets = [];
   try { sockets = hs.store.all(`SELECT remote, GROUP_CONCAT(DISTINCT port) AS ports, MIN(first_seen) AS first_seen, MAX(last_seen) AS last_seen, SUM(seen) AS seen FROM net_seen WHERE ${scopeSql} AND last_seen > ? GROUP BY remote ORDER BY last_seen DESC LIMIT 60`, ...scopeArgs, since); } catch (e) { /* none */ }
   const risk = v => v ? hs.store.get("SELECT risk, risk_score, reasons FROM observables WHERE value = ? AND risk_score >= 40", v) : null;
-  const flagOf = (...vals) => { for (const v of vals) { const r = risk(v); if (r) return { risk: r.risk, score: r.risk_score, why: (JSON.parse(r.reasons || '[]')[0] || '') }; } return null; };
+  const typeOf = v => /^[\d.]+$|:/.test(v) ? 'ip' : 'domain';
+  // same verdict as the findings: allow list, cloud tone-down and two-source rule applied
+  const flagOf = (...vals) => {
+    for (const v of vals) {
+      if (!v) continue;
+      if (hs.intel) { const f = hs.intel.flaggedFor(v, typeOf(v), hs); if (f) return { risk: f.risk, score: f.score, why: f.why }; continue; }
+      const r = risk(v); if (r) return { risk: r.risk, score: r.risk_score, why: (JSON.parse(r.reasons || '[]')[0] || '') };
+    }
+    return null;
+  };
   flows.forEach(f => { f.flag = flagOf(f.dest, f.ip); });
   sockets.forEach(s => { s.flag = flagOf(s.remote); });
 

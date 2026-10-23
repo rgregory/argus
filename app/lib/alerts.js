@@ -14,7 +14,7 @@
 // the backlog.
 const fs = require('node:fs');
 const path = require('node:path');
-const { cfg, logger, fetchText } = require('./util');
+const { cfg, logger, fetchText, dayKey } = require('./util');
 
 const log = logger('alerts');
 const H = 3600e3;
@@ -35,9 +35,24 @@ class Alerts {
     this.webhook = (env.ARGUS_ALERT_WEBHOOK || '').trim();
     this.publicUrl = (env.ARGUS_PUBLIC_URL || '').trim().replace(/\/+$/, '');
     this.maxPerHour = +(env.ARGUS_ALERT_MAX_PER_HOUR || 6);
+    // Quiet hours "22-7" (local time, end hour excluded): only highs get through
+    // (ARGUS_ALERT_QUIET_HIGH=0 holds those too); the rest goes out when it ends.
+    const q = String(env.ARGUS_ALERT_QUIET || '').match(/^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$/);
+    this.quiet = q && +q[1] !== +q[2] && +q[1] < 24 && +q[2] < 24 ? [+q[1], +q[2]] : null;
+    this.quietHigh = !/^(0|false|no|off)$/i.test(env.ARGUS_ALERT_QUIET_HIGH || '1');
+    // Severities batched into one morning alert at ARGUS_DIGEST_HOUR instead of right away.
+    this.batch = new Set(String(env.ARGUS_ALERT_BATCH || '').toLowerCase().split(/[,\s]+/).filter(x => x in RANK));
+    this.batchHour = +(env.ARGUS_DIGEST_HOUR ?? 7);
+    this.held = 0;
     this.sentTimes = [];
     this.last = null; this.lastError = ''; this.sent = 0;
     this.outbox = path.join(cfg.data, 'alerts', 'outbox.tsv');
+  }
+
+  inQuiet(h) {
+    if (!this.quiet) return false;
+    const [a, b] = this.quiet;
+    return a < b ? h >= a && h < b : h >= a || h < b;
   }
 
   channels() { return { mac: this.mac, ntfy: !!this.ntfy.url, pushover: !!(this.pushover.token && this.pushover.user), webhook: !!this.webhook }; }
@@ -63,10 +78,20 @@ class Alerts {
       log.info(`alerts armed; ${items.length} open item(s) recorded without notifying`);
       return;
     }
-    const fresh = items.filter(it => sent.get(it.key) !== it.fp && !(it.fpV1 && sent.get(it.key) === it.fpV1));
+    let fresh = items.filter(it => sent.get(it.key) !== it.fp && !(it.fpV1 && sent.get(it.key) === it.fpV1));
+    // Held items aren't recorded as sent, so they come round again on a later run.
+    const hour = new Date().getHours(), quiet = this.inQuiet(hour);
+    const batchNow = this.batch.size > 0 && hour === this.batchHour && !quiet && this.store.kvGet('alerts.batchDay', '') !== dayKey();
+    this.held = 0;
+    fresh = fresh.filter(it => {
+      const hold = (it.kind === 'finding' && this.batch.has(it.sev) && !batchNow) || (quiet && !(this.quietHigh && it.sev === 'high'));
+      if (hold) this.held++;
+      return !hold;
+    });
+    if (batchNow) this.store.kvSet('alerts.batchDay', dayKey());
     // health checks that were alerted and have recovered
     const live = new Set(items.map(i => i.key));
-    const recovered = report.health && report.health.grace ? [] : [...sent.keys()].filter(k => k.startsWith('h:') && !live.has(k) && hc.some(c => 'h:' + c.id === k && c.status === 'ok'));
+    const recovered = (report.health && report.health.grace) || quiet ? [] : [...sent.keys()].filter(k => k.startsWith('h:') && !live.has(k) && hc.some(c => 'h:' + c.id === k && c.status === 'ok'));
     // findings that went away are forgotten, so they alert again if they come back
     const gone = [...sent.keys()].filter(k => k.startsWith('f:') && !live.has(k));
     if (gone.length) this.store.tx(() => gone.forEach(k => this.store.run('DELETE FROM alert_sent WHERE key = ?', k)));
@@ -144,7 +169,8 @@ class Alerts {
 
   status() {
     const sevName = Object.keys(RANK).find(k => RANK[k] === this.minSev);
-    return { channels: this.channels(), minSev: sevName, health: this.health, armed: !!this.store.kvGet('alerts.init', null), sent: this.sent, last: this.last, error: this.lastError, maxPerHour: this.maxPerHour };
+    return { channels: this.channels(), minSev: sevName, health: this.health, armed: !!this.store.kvGet('alerts.init', null), sent: this.sent, last: this.last, error: this.lastError, maxPerHour: this.maxPerHour,
+      quiet: this.quiet ? `${this.quiet[0]}-${this.quiet[1]}` : '', quietHigh: this.quietHigh, batch: [...this.batch], batchHour: this.batchHour, held: this.held };
   }
 }
 

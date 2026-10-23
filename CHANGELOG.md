@@ -4,6 +4,11 @@
 
 ### Added
 
+- **One source isn't enough.** An outbound indicator flagged by a single reputation source (one OSINT provider, or one medium/low feed) is shown as low until an independent source agrees; the finding names the source. High-severity feeds, CrowdSec local detections and inbound activity keep their severity. `ARGUS_MIN_SOURCES=1` turns it off. Acknowledgements made before still hold.
+- **`./argus.sh update` and `rollback`.** `update` keeps the running image as `argus:prev`, builds, restarts and waits for the dashboard; if it doesn't answer, it goes back to the previous image by itself and shows the last log lines. `rollback` switches to the previous image by hand.
+- **Triage backups.** Acknowledgements and the allow list are written nightly to `data/backups/triage-YYYYMMDD.json` (14 kept, `ARGUS_BACKUP_KEEP`). `./argus.sh backup` writes one now; `./argus.sh restore [file]` merges one back in (missing entries added, newer ones win, nothing removed).
+- **IPv6 owners.** The owner lookup now loads iptoasn.com's IPv6 table too, and reads IPv4-mapped addresses.
+- **Quiet hours and batched alerts.** `ARGUS_ALERT_QUIET=22-7` holds everything but highs overnight (`ARGUS_ALERT_QUIET_HIGH=0` holds those too) and sends the rest when quiet hours end. `ARGUS_ALERT_BATCH=medium` collects mediums into one alert at `ARGUS_DIGEST_HOUR`. The Alerts card shows both and how many are held.
 - **IP owners.** A local copy of the iptoasn.com table (about 7 MB, refreshed weekly; lookups never leave the Mac) shows the AS number and name of every IP indicator, in the Indicators table, indicator details and threat-intel findings. Status is under Sources & feeds. `ARGUS_ASN=0` turns it off. The cloud tone-down now uses it, so an IP flagged only by OTX is recognised as Google's or Amazon's too.
 - **Allow list.** IPs, IPv4 ranges, domains (with subdomains) and AS numbers you've decided are fine raise no findings, in threat intel, Little Snitch and the program views. Add them under Indicators › Allow list, from an indicator's details (this IP, its AS, its domain), or with `ARGUS_ALLOW` in `argus.env`.
 - **Time-limited acknowledgements.** Acknowledge for 7, 30 or 90 days, singly or with Acknowledge all. When the time runs out the finding comes back marked "acknowledgement expired".
@@ -11,6 +16,12 @@
 - **Unit tests** in `test/` (`node --test test/*.test.js`, also run in CI): fingerprint stability for every time format the code writes, acknowledgement expiry and upgrade, the allow list and the trend counts.
 
 ### Changed
+
+- **One verdict everywhere.** "Who is the Mac talking to?" rings, its flagged count, the network and Little Snitch findings, DNS-to-program attribution and program dossiers now treat an indicator as flagged only when its finding would be medium or high: the allow list, the cloud tone-down and the two-source rule apply there too.
+- **"Is it getting better?"** Open highs and mediums get the full height on their own scale; what you've set aside is a separate strip under the axis, so a large cleared backlog no longer flattens the lines. End labels no longer overlap, and event bars stay inside the chart.
+- **Lows no longer top the Overview.** Areas rank by highs, then mediums, then lows, so hundreds of toned-down reputation hits can't make Threat intel the "highest exposure". The area rings show only open highs and mediums; lows are still counted in the text. "Flagged" and the Indicators tab badge count indicators flagged after the allow list, the cloud tone-down and the two-source rule, with the rest shown as "set aside".
+- **A calmer Overview.** One row of tabs, with CrowdSec, DNS, Syslog, Sources & feeds and Throughput under More; plain text for tabs and labels; a smaller masthead whose legend became five swatches on one context line (events, MB read, indicators checked); three numbers instead of six (High, Medium, Flagged); and area rings in neutral grey with only severity in colour.
+- **"Who is the Mac talking to?"** moved up the Overview, before "When did things happen?".
 
 - **Fingerprints ignore times and counters anywhere in a line**, in every format Argus writes (ISO, `fmtTs`, locale dates and times, "3 h ago", "(×12)", "1,589 hits"). Acknowledgements, alerts and the 24-hour changes made before this update still match: older fingerprints are recognised and upgraded, so nothing comes back or alerts again because of the change.
 

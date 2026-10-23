@@ -8,6 +8,10 @@
 #   ./argus.sh build                build the image (argus:latest); fixes builder DNS if needed
 #   ./argus.sh builder-reset        recreate the builder VM with ARGUS_BUILD_DNS servers
 #   ./argus.sh up | down | restart  start / stop the container
+#   ./argus.sh update               build, restart, roll back automatically if it doesn't come up
+#   ./argus.sh rollback             go back to the image before the last update
+#   ./argus.sh backup               save acknowledgements and the allow list to data/backups (also nightly)
+#   ./argus.sh restore [file]       merge a backup back in (newest if no file given)
 #   ./argus.sh install-collector    install the root LaunchDaemon + your LaunchAgent
 #   ./argus.sh uninstall-collector
 #   ./argus.sh install-telemetry    eslogger + TCC.db LaunchDaemons (then grant Full Disk Access)
@@ -364,10 +368,11 @@ cmd_up() {
 
   log "starting $NAME"
   container "${args[@]}" >/dev/null
+  UP_OK=0
   printf '    waiting for the dashboard '
   local i
   for i in $(seq 1 90); do
-    if curl -fsS "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; then echo; ok "dashboard: http://127.0.0.1:${port} (./argus.sh open signs you in)"; break; fi
+    if curl -fsS "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; then echo; UP_OK=1; ok "dashboard: http://127.0.0.1:${port} (./argus.sh open signs you in)"; break; fi
     printf '.'; sleep 2
     [ "$i" = 90 ] && { echo; warn "not answering yet; check ./argus.sh logs"; }
   done
@@ -376,6 +381,36 @@ cmd_up() {
   fi
   [ -f "$DAEMON_PLIST" ] || warn "host collector not installed: ./argus.sh install-collector"
   [ -n "$(env_val ARGUS_TOKEN)" ] || warn "no ARGUS_TOKEN: anything on this Mac can read the dashboard. Run ./argus.sh init, then ./argus.sh restart"
+}
+
+PREV_IMAGE="${IMAGE%:*}:prev"
+
+# Build, keep the running image as :prev, restart, and go back to :prev if the
+# new one doesn't answer. A failed build changes nothing: the old container keeps running.
+cmd_update() {
+  preflight
+  local had=0
+  if container image inspect "$IMAGE" >/dev/null 2>&1; then
+    container image tag "$IMAGE" "$PREV_IMAGE" >/dev/null 2>&1 && had=1 || warn "couldn't keep a copy of the current image; no rollback point"
+  fi
+  cmd_build
+  cmd_down
+  cmd_up
+  if [ "$UP_OK" = 1 ]; then ok "updated$( [ "$had" = 1 ] && echo "; the previous image is kept as $PREV_IMAGE (./argus.sh rollback)")"; return 0; fi
+  [ "$had" = 1 ] || die "the new image didn't come up and there's no previous image to go back to; check ./argus.sh logs"
+  warn "the new image didn't answer; going back to the previous one"
+  container logs "$NAME" 2>/dev/null | tail -20 >&2 || true
+  container image tag "$PREV_IMAGE" "$IMAGE" >/dev/null 2>&1 || die "couldn't restore $PREV_IMAGE"
+  cmd_down; cmd_up
+  [ "$UP_OK" = 1 ] && die "update failed; rolled back to the previous image (the log lines above show why)" || die "update failed and the previous image didn't answer either; check ./argus.sh logs"
+}
+
+cmd_rollback() {
+  preflight
+  container image inspect "$PREV_IMAGE" >/dev/null 2>&1 || die "no previous image ($PREV_IMAGE); it's kept by ./argus.sh update"
+  container image tag "$PREV_IMAGE" "$IMAGE" >/dev/null 2>&1 || die "couldn't tag $PREV_IMAGE as $IMAGE"
+  cmd_down; cmd_up
+  [ "$UP_OK" = 1 ] && ok "running the previous image" || die "the previous image didn't answer; check ./argus.sh logs"
 }
 
 cmd_down() {
@@ -758,6 +793,36 @@ cmd_stream() {
 cmd_logs()  { container logs -n "${1:-200}" -f "$NAME"; }
 cmd_shell() { container exec -it "$NAME" /bin/bash; }
 cmd_cscli() { container exec "$NAME" cscli "$@"; }
+# POST to the dashboard API; the token (if any) goes in a header, never in the URL.
+api_post() {
+  local tok; tok="$(env_val ARGUS_TOKEN)"
+  curl -fsS -X POST -H 'Content-Type: application/json' ${tok:+-H "Authorization: Bearer $tok"} \
+    -d "$2" "http://127.0.0.1:$(env_val ARGUS_HTTP_PORT 7080)$1"
+}
+
+# Acknowledgements and the allow list, to $ARGUS_HOME/data/backups (also written nightly).
+cmd_backup() {
+  require_config; running "$NAME" || die "argus isn't running: ./argus.sh up"
+  local out; out="$(api_post /api/triage/backup '{}')" || die "backup failed; see ./argus.sh logs"
+  ok "wrote $DATA_DIR/backups/$(printf '%s' "$out" | sed -n 's/.*"file":"\([^"]*\)".*/\1/p')"
+}
+
+# Merges a triage backup back in (adds missing entries, keeps whatever is newer).
+cmd_restore() {
+  require_config; running "$NAME" || die "argus isn't running: ./argus.sh up"
+  local f="${1:-}"
+  if [ -z "$f" ]; then
+    f="$(ls -t "$DATA_DIR"/backups/triage-*.json 2>/dev/null | head -1)"
+    [ -n "$f" ] || die "no backups in $DATA_DIR/backups"
+    log "restoring the newest backup, $(basename "$f")"
+  fi
+  [ -f "$f" ] || f="$DATA_DIR/backups/$f"
+  [ -f "$f" ] || die "no such file: ${1:-}"
+  case "$(cd "$(dirname "$f")" && pwd)" in "$DATA_DIR/backups") ;; *) cp "$f" "$DATA_DIR/backups/" || die "couldn't copy $f into $DATA_DIR/backups" ;; esac
+  local out; out="$(api_post /api/triage/restore "{\"file\":\"$(basename "$f")\"}")" || die "restore failed; see ./argus.sh logs"
+  ok "restored: $(printf '%s' "$out" | sed -n 's/.*"acks":\([0-9]*\).*"allow":\([0-9]*\).*/\1 acknowledgement(s), \2 allow-list entries/p')"
+}
+
 cmd_open()  { # signs the browser in: the server swaps ?token= for a cookie and redirects
   local tok; tok="$(env_val ARGUS_TOKEN)"
   open "http://127.0.0.1:$(env_val ARGUS_HTTP_PORT 7080)/${tok:+?token=$tok}"
@@ -780,9 +845,10 @@ cmd_host_access() {
 
 cmd_destroy() {
   echo "This deletes the $NAME container and volumes: $VOLUMES (indicators, CrowdSec state, feed cache)."
-  echo "$ARGUS_HOME (config, reports) is kept."
+  echo "$ARGUS_HOME (config, reports, triage backups) is kept; acknowledgements and the allow list are backed up first."
   printf 'Type "destroy" to continue: '; read -r a
   [ "$a" = "destroy" ] || die "aborted"
+  if running "$NAME" && [ -f "$ENV_FILE" ]; then cmd_backup || warn "couldn't back up acknowledgements and the allow list first"; fi
   cmd_down
   local v; for v in $VOLUMES; do container volume delete "$v" >/dev/null 2>&1 && ok "deleted volume $v" || true; done
 }
@@ -795,6 +861,10 @@ case "${1:-}" in
   builder-reset) builder_reset "$(env_val ARGUS_BUILD_DNS '1.1.1.1 9.9.9.9')" ;;
   up|start) cmd_up ;;
   down|stop) cmd_down ;;
+  update) cmd_update ;;
+  backup) cmd_backup ;;
+  restore) shift; cmd_restore "${1:-}" ;;
+  rollback) cmd_rollback ;;
   restart) preflight; container image inspect "$IMAGE" >/dev/null 2>&1 || die "image $IMAGE not found: run ./argus.sh build"; cmd_down; cmd_up ;;
   status) cmd_status ;;
   logs) shift; cmd_logs "$@" ;;

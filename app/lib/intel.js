@@ -164,10 +164,10 @@ class Intel {
     const entry = Intel.normAllow(raw);
     if (!entry) return null;
     this.store.run('INSERT OR REPLACE INTO allowlist(entry, note, at) VALUES (?, ?, ?)', entry, String(note).slice(0, 300), Date.now());
-    this.allowRules = null;
+    this.allowRules = null; this.flagCache = null;
     return entry;
   }
-  allowRemove(raw) { this.store.run('DELETE FROM allowlist WHERE entry = ?', Intel.normAllow(raw) || String(raw)); this.allowRules = null; }
+  allowRemove(raw) { this.store.run('DELETE FROM allowlist WHERE entry = ?', Intel.normAllow(raw) || String(raw)); this.allowRules = null; this.flagCache = null; }
   allowedBy(value, type) {
     if (!this.allowRules) {
       const r = { ips: new Map(), ranges: [], domains: new Map(), asns: new Map() };
@@ -389,9 +389,17 @@ class Intel {
   }
   reputationOnly(o) {
     if (o.reasons.some(r => /^CrowdSec local detection/.test(r))) return false;
-    const high = this.store.all("SELECT feed FROM feed_hits WHERE value = ? AND type = 'ip'", o.value)
+    const high = this.store.all('SELECT feed FROM feed_hits WHERE value = ? AND type = ?', o.value, o.type)
       .some(h => (this.feeds.defs.find(d => d.id === h.feed) || {}).severity === 'high');
     return !high && o.sources.every(x => x === 'connection' || x === 'resolved' || x === 'dns');
+  }
+  // Two-source rule: an outbound indicator flagged by a single reputation source
+  // (one provider, or one medium/low feed) is shown as low until an independent
+  // source agrees. ARGUS_MIN_SOURCES=1 turns it off.
+  singleSource(o) {
+    const min = Math.max(1, +env('ARGUS_MIN_SOURCES', 2) || 2);
+    if (min < 2 || o.reasons.length >= min || !this.reputationOnly(o)) return '';
+    return (o.reasons[0] || '').replace(/^feed:\s*/, '').split(/[:—]/)[0].trim() || 'one source';
   }
   // Who connected: signed paths from net_seen when known, else the process names in the context.
   trustedCallers(o, hs) {
@@ -406,6 +414,48 @@ class Intel {
     return procs.length && procs.every(ok) ? [...new Set(procs)].sort().join(', ') + ' (by name)' : '';
   }
 
+  // How a flagged indicator counts once the cloud tone-down and the two-source rule
+  // are applied. toned goes into the evidence; single stays out of it, so
+  // acknowledgements made before that rule still hold.
+  assess(o, hs) {
+    let toned = '';
+    if (o.type === 'ip' && this.reputationOnly(o)) {
+      const owner = this.cloudOwner(o), callers = owner && this.trustedCallers(o, hs);
+      if (owner && callers) toned = `toned down to low: ${owner} address, reputation reports only, contacted by ${callers}`;
+    }
+    const single = !toned && this.singleSource(o);
+    return { level: toned || single ? 'low' : o.risk_score >= 75 ? 'high' : 'medium', toned, single };
+  }
+
+  // The same verdict for one value, for the network, Little Snitch and dossier views:
+  // null when it isn't flagged or is on the allow list. Cached for a minute.
+  flagLevel(value, type, hs) {
+    if (!value) return null;
+    const k = type + '|' + value, now = Date.now();
+    if (!this.flagCache || now - this.flagCache.at > 60e3) this.flagCache = { at: now, m: new Map() };
+    if (this.flagCache.m.has(k)) return this.flagCache.m.get(k);
+    let v = null;
+    if (!this.allowedBy(value, type)) {
+      const r = this.store.get('SELECT * FROM observables WHERE value = ? AND type = ? AND risk_score >= 40', value, type);
+      if (r) { const o = rowOut(r); v = { ...this.assess(o, hs), risk: o.risk, score: o.risk_score, why: o.reasons[0] || '' }; }
+    }
+    this.flagCache.m.set(k, v);
+    return v;
+  }
+  // Flagged indicators after the allow list, the cloud tone-down and the two-source
+  // rule: what the Overview and the Indicators badge count.
+  flagSummary(hs) {
+    const out = { high: 0, medium: 0, low: 0, allowed: 0, raw: 0 };
+    for (const r of this.store.all('SELECT value, type FROM observables WHERE risk_score >= 40')) {
+      out.raw++;
+      const v = this.flagLevel(r.value, r.type, hs);
+      if (!v) out.allowed++; else out[v.level]++;
+    }
+    return out;
+  }
+  // Counts as flagged in the views: medium or high after the rules above.
+  flaggedFor(value, type, hs) { const v = this.flagLevel(value, type, hs); return v && v.level !== 'low' ? v : null; }
+
   findings(hs) {
     const rows = this.store.all('SELECT * FROM observables WHERE risk_score >= 40 ORDER BY risk_score DESC, last_seen DESC LIMIT 400')
       .filter(r => !this.allowedBy(r.value, r.type)).slice(0, 300);
@@ -416,14 +466,10 @@ class Intel {
         ? (src.includes('download') ? 'downloaded from' : src.includes('dns') || src.includes('dns-heuristic') ? 'queried' : src.includes('manual') ? 'looked up' : 'seen')
         : src.includes('download') ? 'downloaded from' : src.includes('connection') ? 'in active connections' : src.includes('ssh') ? 'tried SSH' : src.includes('screensharing') ? 'tried Screen Sharing'
           : src.includes('firewall') ? 'probed the firewall' : src.some(s => s.startsWith('syslog:')) ? `in syslog from ${src.find(s => s.startsWith('syslog:')).slice(7)}` : src.includes('resolved') ? 'resolved from a domain' : 'seen';
-      let toned = '';
-      if (o.type === 'ip' && this.reputationOnly(o)) {
-        const owner = this.cloudOwner(o), callers = owner && this.trustedCallers(o, hs);
-        if (owner && callers) toned = `toned down to low: ${owner} address, reputation reports only, contacted by ${callers}`;
-      }
-      return { sev: toned ? 'low' : o.risk_score >= 75 ? 'high' : 'medium', area: 'Threat intel', source: 'feeds / CrowdSec / OSINT',
+      const { level, toned, single } = this.assess(o, hs);
+      return { sev: level, area: 'Threat intel', source: 'feeds / CrowdSec / OSINT',
         title: `${o.risk === 'malicious' ? 'Malicious' : 'Suspicious'} ${o.type === 'ip' ? 'IP' : 'domain'} ${what}: ${o.value}`,
-        detail: 'Matched a threat feed, CrowdSec, or an OSINT source. Open it in Indicators for full results.' + (this.owner(o.value, o.type) ? ` Owner: ${this.owner(o.value, o.type)}.` : ''),
+        detail: (single ? `Only one source (${single}) flags it, so it's shown as low until a second source agrees. ` : '') + 'Matched a threat feed, CrowdSec, or an OSINT source. Open it in Indicators for full results.' + (this.owner(o.value, o.type) ? ` Owner: ${this.owner(o.value, o.type)}.` : ''),
         evidence: [toned, ...o.reasons, `sources: ${src.join(', ')}`, o.context ? `context: ${o.context}` : '', `first seen ${new Date(o.first_seen).toLocaleString()}, last ${new Date(o.last_seen).toLocaleString()}, ${o.hits} hits`].filter(Boolean),
         count: o.hits, indicator: { value: o.value, type: o.type } };
     });

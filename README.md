@@ -266,6 +266,10 @@ git clone https://github.com/rgregory/argus.git && cd argus
 ./argus.sh status | logs | shell
 ./argus.sh cscli alerts list    # anything cscli can do
 ./argus.sh restart              # after editing argus.env
+./argus.sh update               # build and restart; goes back to the previous image if it doesn't come up
+./argus.sh rollback             # go back to the image before the last update
+./argus.sh backup               # save acknowledgements and the allow list (also done nightly)
+./argus.sh restore [file]       # merge a triage backup back in (newest if no file given)
 ./argus.sh destroy              # remove container + volumes, keep config and reports
 ```
 
@@ -323,13 +327,19 @@ Every five minutes Argus writes reports to `$ARGUS_HOME/data/reports/`: `latest.
 
 ### Who owns an IP, and cloud noise
 
-Argus keeps a local copy of the [iptoasn.com](https://iptoasn.com) table, about 7 MB downloaded weekly, and shows the owner (AS number and name) of every IP indicator. Lookups happen in memory, so nothing about your traffic is sent anywhere; `ARGUS_ASN=0` turns it off.
+Argus keeps a local copy of the [iptoasn.com](https://iptoasn.com) table, IPv4 and IPv6, about 10 MB downloaded weekly, and shows the owner (AS number and name) of every IP indicator. Lookups happen in memory, so nothing about your traffic is sent anywhere; `ARGUS_ASN=0` turns it off.
 
 Shared cloud addresses pick up abuse reports and OTX pulses from earlier tenants. When an outbound IP belongs to one of the owners in `ARGUS_TRUSTED_CLOUDS` (default Apple, Google, Amazon, Microsoft, Cloudflare), was flagged only by reputation sources, and was contacted only by Apple-signed programs or a signed browser, its finding is shown as low with a "toned down" line in its evidence. A high-severity feed match, a CrowdSec local detection or any inbound activity keeps the normal severity. `ARGUS_TRUSTED_CLOUDS=off` turns this off.
+
+### One source isn't enough
+
+An outbound indicator flagged by a single reputation source, one OSINT provider or one medium- or low-severity feed, is shown as low until a second, independent source agrees. Its finding says which source it was. A high-severity feed, a CrowdSec local detection, any second source, or inbound activity (SSH, Screen Sharing, firewall) keeps the normal severity. `ARGUS_MIN_SOURCES=1` turns the rule off.
 
 ### Allow list
 
 Indicators you've decided are fine can go on the allow list: an IP, an IPv4 range (`17.0.0.0/8`), a domain (covers its subdomains) or an AS number (`AS15169`). They raise no findings anywhere, including the Little Snitch and program views. Add entries under Indicators › Allow list, from an indicator's details (allow the IP, its AS or its domain), or with `ARGUS_ALLOW` in `argus.env`.
+
+Acknowledgements and the allow list live in the database volume, so Argus also writes them every night to `$ARGUS_HOME/data/backups/triage-YYYYMMDD.json` (14 kept, `ARGUS_BACKUP_KEEP`). `./argus.sh restore` merges the newest one back in after a `destroy` or a damaged volume: missing entries are added, newer ones win, nothing is removed.
 
 ### Working through findings
 
@@ -355,7 +365,7 @@ Click any program, in the network chart, in a finding's evidence or in the Endpo
 
 A quiet dashboard should mean a quiet Mac, not a stopped collector. Argus checks every input on each report (collectors, unified log, Endpoint Security, the TCC reader, snapshots, Little Snitch, feeds, Sigma, CrowdSec) and shows anything stalled in a strip at the top of every tab, with the usual fix.
 
-New high findings and stopped inputs also raise an alert: a macOS notification by default, plus ntfy, Pushover or a webhook if you configure them in `argus.env`. A finding alerts once, and again only if new evidence shows up. Acknowledged findings stay quiet. Sources & feeds › Alerts has a "Send a test" button.
+New high findings and stopped inputs also raise an alert: a macOS notification by default, plus ntfy, Pushover or a webhook if you configure them in `argus.env`. A finding alerts once, and again only if new evidence shows up. Acknowledged findings stay quiet. Sources & feeds › Alerts has a "Send a test" button. `ARGUS_ALERT_QUIET=22-7` sets quiet hours (only highs get through; the rest goes out when they end), and `ARGUS_ALERT_BATCH=medium` collects mediums into one alert at `ARGUS_DIGEST_HOUR` instead of sending each as it appears.
 
 ## Log throughput
 
@@ -498,7 +508,8 @@ Divide the line count by 600 to get events per second. The dashboard's Throughpu
 | `server.js` | HTTP service and API |
 | `lib/engine.js` | macOS log analyzer (it also runs in a browser) |
 | `lib/intel.js` | Indicators, scoring, OSINT providers |
-| `lib/asn.js` | Local IP-to-owner (ASN) table |
+| `lib/asn.js` | Local IP-to-owner (ASN) tables, IPv4 and IPv6 |
+| `lib/triage.js` | Nightly backup and restore of acknowledgements and the allow list |
 | `lib/feeds.js` | Threat feeds |
 | `lib/crowdsec.js` | Decisions stream and alerts |
 | `lib/ingest.js` | Inbox, syslog spool, Pi-hole |

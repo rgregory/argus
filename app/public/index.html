@@ -59,7 +59,7 @@
   .card-title, h3.card-title { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .03em; font-weight: 600; font-size: 1.05rem; }
   .navbar { background: var(--paper) !important; border-bottom: 1px solid var(--rule); }
   .navbar-brand span { font-family: 'Fraunces', Georgia, serif; font-weight: 600; letter-spacing: .02em; }
-  .navbar-nav .nav-link { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; letter-spacing: .04em; font-size: .98rem; color: var(--ink-2); }
+  .navbar-nav .nav-link { font-family: 'Source Serif 4', Georgia, serif; font-size: .95rem; color: var(--ink-2); }
   .navbar-nav .nav-item.active .nav-link, .navbar-nav .nav-link:hover { color: var(--ink); }
   .navbar-nav .nav-item.active .nav-link::after { border-color: var(--ink) !important; }
   .table thead th { font-family: 'Fraunces', Georgia, serif; font-variant: small-caps; text-transform: none; letter-spacing: .04em; font-size: .82rem; color: var(--muted); background: transparent; }
@@ -236,6 +236,32 @@
   .table-info { --tblr-table-bg: color-mix(in srgb, var(--sev-info) 12%, var(--paper-2)) !important; }
   .table-success { --tblr-table-bg: color-mix(in srgb, var(--ok) 12%, var(--paper-2)) !important; }
   .table-danger > td, .table-warning > td, .table-info > td, .table-success > td { color: var(--ink); }
+
+  /* calmer overview */
+  .ed-tabs { flex-wrap: nowrap !important; }
+  .ed-tabs .tab-badge { font-size: .68rem; padding: .15em .45em; }
+  .ed-more { position: relative; }
+  .ed-more-menu { position: absolute; top: 100%; left: 0; z-index: 30; min-width: 13rem; background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.08); padding: .3rem; }
+  .ed-more-menu a { display: flex; align-items: center; gap: .55rem; padding: .45rem .6rem; border-radius: 6px; color: var(--ink-2); text-decoration: none; font-family: 'Source Serif 4', Georgia, serif; }
+  .ed-more-menu a:hover, .ed-more-menu a.is-on { background: var(--field); color: var(--ink); }
+  .ed-mast2 { grid-template-columns: 210px 1fr; gap: 2.2rem; padding-top: 1.2rem; }
+  .ed-clock svg { width: 210px; height: 210px; }
+  .ed-mast2 .ed-title { font-size: clamp(1.7rem, 3.2vw, 2.5rem); margin: .25rem 0 .6rem; }
+  .ed-kicker { font-size: .85rem; }
+  .ed-context { margin: .7rem 0 0; color: var(--muted); font-size: .92rem; }
+  .ed-keys { display: inline-flex; gap: 3px; margin-right: .55rem; vertical-align: middle; }
+  .ed-keys i { width: .55rem; height: .55rem; border-radius: 2px; display: inline-block; }
+  .ed-stats { grid-template-columns: repeat(3, 1fr); margin: 1.4rem 0 .2rem; }
+  .ed-stat { padding: .6rem .4rem .55rem; }
+  .ed-stat-v { font-size: clamp(1.6rem, 3vw, 2.2rem); }
+  .ed-stat-l { font-family: 'Source Serif 4', Georgia, serif; font-variant: normal; letter-spacing: 0; font-size: .9rem; }
+  .ed-sec { margin-top: 2rem; }
+  .ed-pname { font-family: 'Source Serif 4', Georgia, serif; font-variant: normal; font-weight: 600; font-size: 1.05rem; letter-spacing: 0; color: var(--ink); }
+  .ed-sevline { font-family: 'Source Serif 4', Georgia, serif; font-variant: normal; letter-spacing: 0; font-size: .88rem; }
+  .ed-ring { width: 112px; height: 112px; }
+  .ed .page-body, .page-body:has(.ed) { margin-top: .5rem; }
+  .ed-ring > div, .ed-ring svg { width: 112px !important; height: 112px !important; }
+  @media (max-width: 760px) { .ed-stats { grid-template-columns: repeat(3, 1fr); } .ed-tabs { flex-wrap: wrap !important; } }
 </style>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
@@ -269,8 +295,8 @@
   <div class="navbar-expand-md border-bottom">
     <div class="navbar navbar-light">
       <div class="container-xl">
-        <ul class="navbar-nav flex-row flex-wrap">
-          <template x-for="t in tabs" :key="t.id">
+        <ul class="navbar-nav flex-row flex-wrap ed-tabs">
+          <template x-for="t in tabs.filter(t => !t.more)" :key="t.id">
             <li class="nav-item" :class="tab === t.id && 'active'">
               <a class="nav-link" href="#" @click.prevent="setTab(t.id)">
                 <span class="nav-link-icon d-inline-block"><i class="ti" :class="t.icon"></i></span>
@@ -279,6 +305,21 @@
               </a>
             </li>
           </template>
+          <li class="nav-item ed-more" :class="tabs.some(t => t.more && t.id === tab) && 'active'" @click.outside="moreOpen = false">
+            <a class="nav-link" href="#" @click.prevent="moreOpen = !moreOpen" :aria-expanded="moreOpen">
+              <span class="nav-link-title" x-text="(tabs.find(t => t.more && t.id === tab) || { label: 'More' }).label"></span>
+              <span class="badge tab-badge bg-secondary-lt" x-show="tabs.some(t => t.more && t.badge && t.badge())" x-text="tabs.filter(t => t.more && t.badge).reduce((a, t) => a + (+t.badge() || 0), 0) || ''"></span>
+              <i class="ti ti-chevron-down ms-1"></i>
+            </a>
+            <div class="ed-more-menu" x-show="moreOpen" x-transition.opacity>
+              <template x-for="t in tabs.filter(t => t.more)" :key="t.id">
+                <a href="#" :class="tab === t.id && 'is-on'" @click.prevent="setTab(t.id); moreOpen = false">
+                  <i class="ti" :class="t.icon"></i><span x-text="t.label"></span>
+                  <span class="badge tab-badge bg-secondary-lt ms-auto" x-show="t.badge && t.badge()" x-text="t.badge && t.badge()"></span>
+                </a>
+              </template>
+            </div>
+          </li>
         </ul>
       </div>
     </div>
@@ -312,7 +353,7 @@
               <div class="ed-kicker" x-text="'The Argus brief · ' + new Date(r.generated).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })"></div>
               <h1 class="ed-title">What has <span x-text="r.host.name || 'this Mac'"></span> been up&nbsp;to?</h1>
               <p class="ed-lede" x-html="lede()"></p>
-              <div class="ed-legend"><template x-for="c in tlCats()" :key="c[0]"><span><i :style="'background:' + areaColor(c[2])"></i><span x-text="c[1]"></span></span></template><span x-show="clockNormal()"><i class="ed-normal-key"></i>7-day normal</span></div>
+              <p class="ed-context" x-html="mastContext()"></p>
             </div>
           </header>
           <div class="ed-stats">
@@ -332,12 +373,19 @@
               <template x-for="a in areaStats().slice(0, 6)" :key="a.area">
                 <a href="#" class="ed-portrait" @click.prevent="fArea = a.area; fSev = ['high','medium','low','info']; setTab('findings')">
                   <div class="ed-ring" x-html="ringSvg(a)"></div>
-                  <div class="ed-pname" :style="'color:' + areaColor(a.area)" x-text="a.area"></div>
+                  <div class="ed-pname" x-text="a.area"></div>
                   <p class="ed-ptext" x-html="portraitText(a)"></p>
                 </a>
               </template>
               <div class="ed-empty" x-show="!areaStats().length">Nothing open. Every finding is either resolved or acknowledged.</div>
             </div>
+          </section>
+
+          <!-- talkers -->
+          <section class="ed-sec" x-show="talkers().length">
+            <h2 class="ed-h">Who is the Mac talking to?</h2>
+            <p class="ed-sub" x-html="talkersSub()"></p>
+            <div class="ed-chart" x-html="talkersSvg()" @click="dosClick($event)"></div>
           </section>
 
           <!-- timeline -->
@@ -398,13 +446,6 @@
                 </a>
               </template>
             </div>
-          </section>
-
-          <!-- talkers -->
-          <section class="ed-sec" x-show="talkers().length">
-            <h2 class="ed-h">Who is the Mac talking to?</h2>
-            <p class="ed-sub" x-html="talkersSub()"></p>
-            <div class="ed-chart" x-html="talkersSvg()" @click="dosClick($event)"></div>
           </section>
 
           <!-- posture tiles -->
@@ -1109,7 +1150,10 @@
           <div class="col-lg-6"><div class="card">
             <div class="card-header"><h3 class="card-title">Alerts</h3><div class="card-actions"><button class="btn btn-sm" @click="testAlert()"><i class="ti ti-bell"></i> Send a test</button></div></div>
             <div class="card-body small" x-show="r.alerts">
-              <p class="mb-2" x-text="'Alerts go out for new ' + (r.alerts ? (r.alerts.minSev === 'high' ? 'high' : r.alerts.minSev === 'medium' ? 'high and medium' : r.alerts.minSev + ' and worse') : '') + ' findings' + (r.alerts && r.alerts.health !== 'off' ? ' and for inputs that ' + (r.alerts.health === 'warn' ? 'stall or stop' : 'stop') : '') + '. Each finding alerts once, and again only when new evidence appears. Acknowledged findings never alert.'"></p>
+              <p class="mb-2" x-text="'Alerts go out for new ' + (r.alerts ? (r.alerts.minSev === 'high' ? 'high' : r.alerts.minSev === 'medium' ? 'high and medium' : r.alerts.minSev + ' and worse') : '') + ' findings' + (r.alerts && r.alerts.health !== 'off' ? ' and for inputs that ' + (r.alerts.health === 'warn' ? 'stall or stop' : 'stop') : '') + '. Each finding alerts once, and again only when new evidence appears. Acknowledged findings never alert.'
+                + (r.alerts && r.alerts.quiet ? ' Quiet hours ' + r.alerts.quiet + ':00' + (r.alerts.quietHigh ? ', only highs get through' : ', nothing gets through') + '.' : '')
+                + (r.alerts && r.alerts.batch && r.alerts.batch.length ? ' ' + r.alerts.batch.join(' and ') + ' findings are collected into one alert at ' + r.alerts.batchHour + ':00.' : '')
+                + (r.alerts && r.alerts.held ? ' ' + r.alerts.held + ' held for later right now.' : '')"></p>
               <div class="list-group list-group-flush mb-2">
                 <template x-for="ch in [['mac', 'macOS notification', 'on by default; shown by the com.argus.notify agent (./argus.sh install-collector)'], ['ntfy', 'ntfy', 'ARGUS_NTFY_URL'], ['pushover', 'Pushover', 'PUSHOVER_TOKEN + PUSHOVER_USER'], ['webhook', 'Webhook', 'ARGUS_ALERT_WEBHOOK (Slack-compatible JSON)']]" :key="ch[0]">
                   <div class="list-group-item px-0 d-flex gap-2 align-items-baseline"><i class="ed-dot" :style="'background:' + (r.alerts && r.alerts.channels[ch[0]] ? 'var(--ok)' : 'var(--rule)')"></i><strong x-text="ch[1]"></strong><span class="text-secondary flex-fill" x-text="r.alerts && r.alerts.channels[ch[0]] ? 'on' : 'off · set ' + ch[2]"></span></div>
@@ -1136,7 +1180,7 @@
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">IntelOwl</strong><span class="badge" :class="r.inputs.intelowl.configured ? 'bg-green-lt' : 'bg-secondary-lt'" x-text="r.inputs.intelowl.configured ? 'configured' : 'not configured'"></span></div>
                 <div class="text-secondary" x-text="r.inputs.intelowl.configured ? r.inputs.intelowl.url + ' · playbook ' + r.inputs.intelowl.playbook + ' (runs on flagged indicators and manual lookups)' : 'Set INTELOWL_URL and INTELOWL_TOKEN'"></div></div>
               <div class="list-group-item" x-show="r.asn"><div class="d-flex"><strong class="flex-fill">IP owners (ASN table)</strong><span class="badge" :class="!r.asn.enabled ? 'bg-secondary-lt' : r.asn.ranges ? 'bg-green-lt' : 'bg-orange-lt'" x-text="!r.asn.enabled ? 'off' : r.asn.ranges ? 'ok' : 'not loaded'"></span></div>
-                <div class="text-secondary" x-text="!r.asn.enabled ? 'ARGUS_ASN=0' : (r.asn.ranges ? num(r.asn.ranges) + ' ranges from iptoasn.com · updated ' + ago(r.asn.updated) + ' · looked up locally' : 'downloading the table from iptoasn.com') + (r.asn.error ? ' · ' + r.asn.error : '')"></div></div>
+                <div class="text-secondary" x-text="!r.asn.enabled ? 'ARGUS_ASN=0' : (r.asn.ranges ? num(r.asn.ranges) + ' IPv4 and ' + num(r.asn.ranges6 || 0) + ' IPv6 ranges from iptoasn.com · updated ' + ago(r.asn.updated) + ' · looked up locally' : 'downloading the table from iptoasn.com') + (r.asn.error ? ' · ' + r.asn.error : '')"></div></div>
               <div class="list-group-item"><div class="d-flex"><strong class="flex-fill">CrowdSec</strong><span class="badge" :class="r.crowdsec.error ? 'bg-red-lt' : 'bg-green-lt'" x-text="r.crowdsec.error ? 'error' : 'ok'"></span></div>
                 <div class="text-secondary" x-text="num(r.crowdsec.decisions) + ' decisions · ' + (r.crowdsec.error || 'stream synced ' + ago(r.crowdsec.lastStream))"></div></div>
             </div></div></div>
@@ -1378,7 +1422,7 @@ function argus() {
     tab: 'overview', macTab: 'access', openFinding: null,
     fSev: ['high', 'medium', 'low'], fArea: '', fQ: '', fLimit: 100,
     ind: { total: 0, rows: [] }, iRisk: 'flagged', iType: '', iSource: '', iQ: '', iOffset: 0,
-    allow: [], allowQ: '', allowNote: '', allowLoaded: false, detail: null, sg: null, sgQ: '', sgAll: false, dos: null, dosBusy: false, dosErr: '', findQ: '', findRes: [], findBusy: false, alertMsg: '', lookupQ: '', lookupBusy: false, lookupErr: '',
+    allow: [], allowQ: '', allowNote: '', allowLoaded: false, moreOpen: false, detail: null, sg: null, sgQ: '', sgAll: false, dos: null, dosBusy: false, dosErr: '', findQ: '', findRes: [], findBusy: false, alertMsg: '', lookupQ: '', lookupBusy: false, lookupErr: '',
     hideCollector: true, showPassing: false, showAcked: false, ackNote: '', ackDays: 0, ackBusy: false, thirdPartyTcc: true, showScans: false,
     macTabs: [{ id: 'access', label: 'Access' }, { id: 'permissions', label: 'Permissions & Gatekeeper' }, { id: 'persistence', label: 'Persistence' },
       { id: 'network', label: 'Network' }, { id: 'crashes', label: 'Crashes' }, { id: 'system', label: 'System' }],
@@ -1387,15 +1431,15 @@ function argus() {
       return [
         { id: 'overview', label: 'Overview', icon: 'ti-layout-dashboard' },
         { id: 'findings', label: 'Findings', icon: 'ti-list-check', badge: () => r && (r.counts.high + r.counts.medium) || '', badgeClass: () => r && r.counts.high ? 'bg-red-lt' : 'bg-orange-lt' },
-        { id: 'indicators', label: 'Indicators', icon: 'ti-fingerprint', badge: () => r && ((r.intel.malicious || 0) + (r.intel.suspicious || 0)) || '', badgeClass: () => r && r.intel.malicious ? 'bg-red-lt' : 'bg-orange-lt' },
-        { id: 'crowdsec', label: 'CrowdSec', icon: 'ti-shield-half', badge: () => r && r.crowdsec.alerts.length || '' },
+        { id: 'indicators', label: 'Indicators', icon: 'ti-fingerprint', badge: () => r && (r.intel.flags ? r.intel.flags.high + r.intel.flags.medium : (r.intel.malicious || 0) + (r.intel.suspicious || 0)) || '', badgeClass: () => r && (r.intel.flags ? r.intel.flags.high : r.intel.malicious) ? 'bg-red-lt' : 'bg-orange-lt' },
+        { id: 'crowdsec', more: true, label: 'CrowdSec', icon: 'ti-shield-half', badge: () => r && r.crowdsec.alerts.length || '' },
         { id: 'macos', label: 'macOS', icon: 'ti-device-laptop' },
         { id: 'endpoint', label: 'Endpoint', icon: 'ti-cpu', badge: () => r && r.hostsec && r.hostsec.es && r.hostsec.es.recent ? r.hostsec.es.recent.filter(e => e.sev === 'high').length || '' : '', badgeClass: () => 'bg-red-lt' },
         { id: 'vulns', label: 'Vulnerabilities', icon: 'ti-bug', badge: () => r && r.findings ? r.findings.filter(f => f.area === 'Vulnerabilities' && (f.sev === 'high' || f.sev === 'medium')).length || '' : '', badgeClass: () => 'bg-orange-lt' },
-        { id: 'dns', label: 'DNS', icon: 'ti-world-search' },
-        { id: 'syslog', label: 'Syslog', icon: 'ti-server-2', badge: () => r && r.syslog.hosts.length || '' },
-        { id: 'sources', label: 'Sources & feeds', icon: 'ti-plug-connected' },
-        { id: 'throughput', label: 'Throughput', icon: 'ti-activity' },
+        { id: 'dns', more: true, label: 'DNS', icon: 'ti-world-search' },
+        { id: 'syslog', more: true, label: 'Syslog', icon: 'ti-server-2', badge: () => r && r.syslog.hosts.length || '' },
+        { id: 'sources', more: true, label: 'Sources & feeds', icon: 'ti-plug-connected' },
+        { id: 'throughput', more: true, label: 'Throughput', icon: 'ti-activity' },
       ];
     },
     init() {
@@ -1541,13 +1585,15 @@ function argus() {
         if (!a.top || w[f.sev] > w[a.top.sev]) a.top = f;
         m.set(f.area, a);
       }
-      return [...m.values()].filter(a => a.score > 0).sort((x, y) => y.score - x.score);
+      // Highs outrank any number of mediums, mediums any number of lows: a pile of
+      // toned-down reputation hits shouldn't top the page.
+      return [...m.values()].filter(a => a.score > 0).sort((x, y) => y.high - x.high || y.medium - x.medium || y.low - x.low);
     },
     lede() {
       if (!this.r) return '';
       const e = this.esc, a = this.areaStats()[0], os = this.r.vulns && this.r.vulns.macos, ack = this.r.findingState && this.r.findingState.acked;
       const parts = [];
-      if (a) parts.push(`Highest exposure: <b style="color:${this.areaColor(a.area)}">${e(a.area)}</b> (${['high', 'medium', 'low'].filter(s => a[s]).map(s => `<b style="color:${this.sevColor(s)}">${a[s]}</b> ${s}`).join(', ')}).`);
+      if (a) parts.push(`Highest exposure: <b>${e(a.area)}</b> (${(a.high || a.medium ? ['high', 'medium'] : ['low']).filter(s => a[s]).map(s => `<b style="color:${this.sevColor(s)}">${a[s]}</b> ${s}`).join(', ')}).`);
       else parts.push('No open high, medium or low findings.');
       if (os && os.installed) parts.push(os.behind && os.behind.length ? `macOS ${e(os.installed)} is <b style="color:${this.sevColor('high')}">${os.behind.length}</b> security ${os.behind.length === 1 ? 'release' : 'releases'} behind.` : `macOS ${e(os.installed)} is current.`);
       if (ack) parts.push(`<b>${ack}</b> acknowledged ${ack === 1 ? 'finding' : 'findings'} hidden.`);
@@ -1555,17 +1601,21 @@ function argus() {
     },
     mastStats() {
       if (!this.r) return [];
-      const c = this.r.counts, flagged = (this.r.intel.malicious || 0) + (this.r.intel.suspicious || 0);
+      const c = this.r.counts, fl = this.r.intel.flags, flagged = fl ? fl.high + fl.medium : (this.r.intel.malicious || 0) + (this.r.intel.suspicious || 0), aside = fl ? fl.low + fl.allowed : 0;
       const big = v => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : this.num(v);
       const b = this.bytes(this.tpTotal('bytes')).split(' ');
       return [
-        { label: 'Events', value: big(this.tpTotal('events')), unit: '24 h' },
-        { label: 'Read', value: b[0], unit: b[1] || '' },
-        { label: 'High', value: c.high || 0, color: c.high ? this.sevColor('high') : '' },
-        { label: 'Medium', value: c.medium || 0, color: c.medium ? this.sevColor('medium') : '' },
-        { label: 'Indicators', value: big(this.r.intel.total || 0), unit: 'checked' },
-        { label: 'Flagged', value: flagged, color: flagged ? this.sevColor('high') : '' },
+        { label: 'High', value: c.high || 0, color: c.high ? this.sevColor('high') : '', unit: 'open' },
+        { label: 'Medium', value: c.medium || 0, color: c.medium ? this.sevColor('medium') : '', unit: 'open' },
+        { label: 'Flagged', value: flagged, color: flagged ? this.sevColor('high') : '', unit: aside ? `+${big(aside)} set aside` : '' },
       ];
+    },
+    // The numbers the stat strip used to carry, as one quiet line under the lede.
+    mastContext() {
+      if (!this.r) return '';
+      const big = v => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : this.num(v);
+      const cats = this.tlCats().map(c => `<i title="${this.esc(c[1])}" style="background:${this.areaColor(c[2])}"></i>`).join('');
+      return `<span class="ed-keys">${cats}</span>${big(this.tpTotal('events'))} security events in 24 h · ${this.bytes(this.tpTotal('bytes'))} read · ${big(this.r.intel.total || 0)} indicators checked`;
     },
     // 24-hour radial clock: midnight at the top, one wedge per hour, categories stacked outward.
     clockSvg() {
@@ -1631,33 +1681,50 @@ function argus() {
       const b = (s, v) => `<b style="color:${this.sevColor(s)}">${v}</b>`;
       const aside = this.trendAside(d), set = aside[n - 1];
       return `Open findings at the end of each day for the last ${n} days, over security events per day. Since ${day(d.days[0])}: high ${b('high', hi[0])} → ${b('high', hi[n - 1])}, medium ${b('medium', me[0])} → ${b('medium', me[n - 1])}.`
-        + (aside.some(Boolean) ? ` The grey band is what you've set aside: <b>${set}</b> acknowledged or toned down today.` : '');
+        + (aside.some(Boolean) ? ` The strip underneath is what you've set aside: <b>${set}</b> acknowledged or toned down today.` : '');
     },
     trendSvg() {
       const d = this.trendData(); if (!d) return '';
-      const W = 1100, H = 250, l = 36, r = 110, t = 16, b = 30, n = d.days.length;
-      const hi = d.total.high, me = d.total.medium, aside = this.trendAside(d), lmax = Math.max(1, ...hi, ...me, ...aside), emax = Math.max(1, ...d.events);
-      const x = i => l + (W - l - r) * (n === 1 ? .5 : i / (n - 1)), y = v => t + (H - t - b) * (1 - v / lmax);
-      const bw = Math.max(2, (W - l - r) / n * .55);
+      const aside = this.trendAside(d), hasAside = aside.some(Boolean);
+      // Open findings get the full height on their own scale; what's been set aside
+      // is a separate strip under the axis with its own scale, so a big backlog
+      // you've cleared doesn't flatten the lines that matter.
+      const W = 1100, l = 36, r = 120, t = 24, ph = 200, sh = hasAside ? 44 : 0, H = t + ph + sh + 30, n = d.days.length;
+      const base = t + ph, hi = d.total.high, me = d.total.medium, lmax = Math.max(1, ...hi, ...me), emax = Math.max(1, ...d.events);
+      const x = i => l + (W - l - r) * (n === 1 ? .5 : i / (n - 1)), y = v => t + ph * (1 - v / lmax);
+      const span = W - l - r, bw = Math.max(2, Math.min(28, span / Math.max(n, 1) * .55));
       const out = [`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Open findings per day">`];
-      d.events.forEach((v, i) => { const h = (H - t - b) * v / emax; out.push(`<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${(H - b - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="var(--ink)" opacity=".08"><title>${this.esc(new Date(d.days[i]).toLocaleDateString())}: ${this.num(v)} events</title></rect>`); });
+      d.events.forEach((v, i) => {
+        const h = ph * v / emax, x0 = Math.max(l, x(i) - bw / 2), x1 = Math.min(W - r, x(i) + bw / 2);
+        out.push(`<rect x="${x0.toFixed(1)}" y="${(base - h).toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${h.toFixed(1)}" fill="var(--ink)" opacity=".08"><title>${this.esc(new Date(d.days[i]).toLocaleDateString())}: ${this.num(v)} events</title></rect>`);
+      });
       for (const g of [lmax, Math.round(lmax / 2)].filter((v, i, a) => v > 0 && a.indexOf(v) === i)) out.push(`<line class="axis" x1="${l}" x2="${W - r}" y1="${y(g)}" y2="${y(g)}" stroke-dasharray="3 4"/><text x="${l - 6}" y="${y(g) + 4}" text-anchor="end" font-size="11">${g}</text>`);
-      out.push(`<line class="axis" x1="${l}" x2="${W - r}" y1="${H - b}" y2="${H - b}"/>`);
+      out.push(`<line class="axis" x1="${l}" x2="${W - r}" y1="${base}" y2="${base}"/>`);
+      const labels = [];
       const line = (arr, s, w) => {
         out.push(`<polyline fill="none" stroke="${this.sevColor(s)}" stroke-width="${w}" stroke-linejoin="round" points="${arr.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}"/>`);
         arr.forEach((v, i) => out.push(`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="${i === n - 1 ? 4 : 2}" fill="${this.sevColor(s)}"><title>${this.esc(new Date(d.days[i]).toLocaleDateString())}: ${v} ${s}</title></circle>`));
-        out.push(`<text x="${x(n - 1) + 10}" y="${y(arr[n - 1]) + 4}" style="font:600 13px Fraunces,Georgia,serif;fill:${this.sevColor(s)}">${arr[n - 1]} ${s}</text>`);
+        labels.push({ y: y(arr[n - 1]) + 4, text: `${arr[n - 1]} ${s}`, color: this.sevColor(s) });
       };
-      if (aside.some(Boolean)) {
-        const pts = aside.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-        out.push(`<polygon points="${x(0).toFixed(1)},${H - b} ${pts} ${x(n - 1).toFixed(1)},${H - b}" fill="var(--muted)" opacity=".16"/><polyline points="${pts}" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity=".7"/>`);
-        aside.forEach((v, i) => out.push(`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="5" fill="transparent"><title>${this.esc(new Date(d.days[i]).toLocaleDateString())}: ${v} set aside (${(d.total.acked || [])[i] || 0} acknowledged, ${(d.total.toned || [])[i] || 0} toned down)</title></circle>`));
-        out.push(`<text x="${x(n - 1) + 10}" y="${y(aside[n - 1]) + 4}" style="font:600 12px Fraunces,Georgia,serif;fill:var(--muted)">${aside[n - 1]} set aside</text>`);
-      }
       line(me, 'medium', 2); line(hi, 'high', 3);
+      // keep end labels at least 16px apart, inside the plot
+      labels.sort((a, b) => a.y - b.y);
+      for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + 16);
+      const over = labels.length ? labels[labels.length - 1].y - (base + 2) : 0;
+      if (over > 0) labels.forEach(lb => { lb.y -= over; });
+      labels.forEach(lb => out.push(`<text x="${x(n - 1) + 10}" y="${lb.y.toFixed(1)}" style="font:600 13px Fraunces,Georgia,serif;fill:${lb.color}">${lb.text}</text>`));
+      if (hasAside) {
+        const amax = Math.max(1, ...aside), top = base + 10, sy = v => top + (sh - 14) * (1 - v / amax), floor = top + sh - 14;
+        aside.forEach((v, i) => {
+          const x0 = Math.max(l, x(i) - bw / 2), x1 = Math.min(W - r, x(i) + bw / 2);
+          out.push(`<rect x="${x0.toFixed(1)}" y="${sy(v).toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${(floor - sy(v)).toFixed(1)}" fill="var(--muted)" opacity=".35"><title>${this.esc(new Date(d.days[i]).toLocaleDateString())}: ${v} set aside (${(d.total.acked || [])[i] || 0} acknowledged, ${(d.total.toned || [])[i] || 0} toned down)</title></rect>`);
+        });
+        out.push(`<line class="axis" x1="${l}" x2="${W - r}" y1="${floor}" y2="${floor}" opacity=".5"/>`);
+        out.push(`<text x="${x(n - 1) + 10}" y="${floor}" style="font:600 12px Fraunces,Georgia,serif;fill:var(--muted)">${aside[n - 1]} set aside</text>`);
+      }
       const ticks = n > 2 ? [0, Math.floor((n - 1) / 2), n - 1] : [0, n - 1];
-      ticks.forEach(i => out.push(`<text x="${x(i)}" y="${H - 10}" text-anchor="middle" font-size="11">${this.esc(new Date(d.days[i]).toLocaleDateString([], { month: 'short', day: 'numeric' }))}</text>`));
-      out.push(`<text x="${W - r + 10}" y="${H - b - 4}" font-size="10.5" style="fill:var(--muted)">bars: events/day</text>`);
+      ticks.forEach(i => out.push(`<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="11">${this.esc(new Date(d.days[i]).toLocaleDateString([], { month: 'short', day: 'numeric' }))}</text>`));
+      out.push(`<text x="${W - r}" y="${t - 8}" text-anchor="end" font-size="10.5" style="fill:var(--muted)">bars: security events per day</text>`);
       out.push('</svg>');
       return out.join('');
     },
@@ -1682,16 +1749,16 @@ function argus() {
       const a = this.areaStats();
       if (!a.length) return 'No open findings.';
       const k = (s, l) => `<b style="color:${this.sevColor(s)}">${l}</b>`;
-      return `Open findings by area, weighted by severity. Highest: <b style="color:${this.areaColor(a[0].area)}">${this.esc(a[0].area)}</b>. Arc length is the area's share of all open findings; ${k('high', 'high')}, ${k('medium', 'medium')}, ${k('low', 'low')}.`;
+      return `Open findings by area, weighted by severity. Highest: <b>${this.esc(a[0].area)}</b>. Arc length is the area's share of open ${k('high', 'high')} and ${k('medium', 'medium')} findings; ${k('low', 'low')} ones, mostly toned-down reputation hits, are counted but don't fill the ring.`;
     },
     portraitText(a) {
       const sv = ['high', 'medium', 'low'].filter(s => a[s]).map(s => `<b style="color:${this.sevColor(s)}">${a[s]}</b> ${s}`).join(' · ');
       return `<span class="ed-sevline">${sv}</span>${this.esc(this.plainTitle(a.top))}${a.n > 1 ? ` <span class="ed-more">+${a.n - 1} more</span>` : ''}`;
     },
     ringSvg(a) {
-      const total = Math.max(1, this.open().length), r = 52, C = 2 * Math.PI * r, col = this.areaColor(a.area);
+      const total = Math.max(1, this.open().filter(f => f.sev === 'high' || f.sev === 'medium').length), r = 52, C = 2 * Math.PI * r, col = this.areaColor(a.area);
       let off = 0; const segs = [];
-      for (const s of ['high', 'medium', 'low', 'info']) {
+      for (const s of ['high', 'medium']) {
         if (!a[s]) continue;
         const len = C * a[s] / total;
         segs.push(`<circle cx="64" cy="64" r="${r}" fill="none" stroke="${this.sevColor(s)}" stroke-width="12" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 64 64)" stroke-linecap="butt"/>`);
@@ -1700,9 +1767,9 @@ function argus() {
       const icon = { 'Access': 'ti-key', 'Persistence': 'ti-repeat', 'Permissions': 'ti-lock-access', 'Network': 'ti-world', 'Endpoint Security': 'ti-cpu', 'Vulnerabilities': 'ti-bug',
         'Browser': 'ti-browser', 'Posture': 'ti-shield-half', 'Gatekeeper': 'ti-shield-lock', 'Devices': 'ti-usb', 'File integrity': 'ti-file-diff', 'Certificates': 'ti-certificate',
         'Downloads': 'ti-download', 'Threat intel': 'ti-fingerprint', 'Crashes': 'ti-bolt', 'System': 'ti-settings', 'Containers': 'ti-box', 'DNS': 'ti-world-search' }[a.area] || 'ti-point';
-      return `<div style="position:relative;width:128px;height:128px"><svg viewBox="0 0 128 128" width="128" height="128"><circle cx="64" cy="64" r="${r}" fill="none" stroke="var(--rule)" stroke-width="12"/>${segs.join('')}<circle cx="64" cy="64" r="40" fill="${col}" opacity=".13"/></svg>`
-        + `<i class="ti ${icon}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.4rem;color:${col}"></i>`
-        + `<div style="position:absolute;right:2px;top:2px;font:700 1rem Fraunces,Georgia,serif;color:var(--ink)">${a.n}</div></div>`;
+      return `<div style="position:relative;width:128px;height:128px"><svg viewBox="0 0 128 128" width="128" height="128"><circle cx="64" cy="64" r="${r}" fill="none" stroke="var(--rule)" stroke-width="12"/>${segs.join('')}<circle cx="64" cy="64" r="40" fill="var(--field)"/></svg>`
+        + `<i class="ti ${icon}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2.2rem;color:var(--ink-2)"></i>`
+        + `<div style="position:absolute;right:2px;top:2px;font:700 1rem Fraunces,Georgia,serif;color:var(--ink)" title="open high and medium findings">${a.high + a.medium || ''}</div></div>`;
     },
     tlCats() {
       return [['auth', 'access and logins', 'Access'], ['gatekeeper', 'Gatekeeper and XProtect', 'Gatekeeper'], ['tcc', 'privacy permissions', 'Permissions'], ['firewall', 'firewall', 'Firewall'], ['background', 'login items', 'Persistence']];
