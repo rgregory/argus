@@ -1211,7 +1211,7 @@
               <th class="sortable" @click="by('status')">Status <i class="ti" :class="arrow('status')"></i></th></tr></thead>
               <tbody><template x-for="p in rows(r.providers)" :key="p.id"><tr><td><span x-text="p.name"></span> <span class="text-secondary small" x-text="p.types.join('/')"></span></td>
                 <td class="small" x-text="modeLabel(p)"></td>
-                <td class="text-end small" x-text="p.callsToday + ' / ' + p.daily"></td><td class="small" :class="p.error && 'text-red'" x-text="p.error ? p.error + ' (' + ago(p.errorAt) + ')' : (p.enabled ? 'ok' : '')"></td></tr></template></tbody></table></div></div></div>
+                <td class="text-end small" x-text="p.callsToday + ' / ' + p.daily"></td><td class="small" :class="p.error && 'text-red'" x-text="p.error ? p.error + ' (' + ago(p.errorAt) + ')' : p.capped ? 'daily limit reached; resumes at midnight' : (p.enabled ? 'ok' : '')" :style="p.capped && !p.error ? 'color:var(--sev-medium)' : ''"></td></tr></template></tbody></table></div></div></div>
           <div class="col-12"><div class="card">
             <div class="card-header"><h3 class="card-title">Threat feeds</h3><div class="card-actions"><button class="btn btn-sm" @click="refreshFeeds()"><i class="ti ti-refresh"></i> Refresh all</button></div></div>
             <div class="table-responsive"><table class="table table-sm card-table"><thead><tr><th>Feed</th><th>Type</th><th>Severity</th><th class="text-end">Entries</th><th>Updated</th><th>Status</th></tr></thead>

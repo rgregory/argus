@@ -104,3 +104,15 @@ test('views count an indicator as flagged only when the findings would (allow li
   intel.allowRemove('6.6.6.2');
   assert.strictEqual(intel.flaggedFor('6.6.6.2', 'ip').level, 'medium');
 });
+
+test('automatic lookups skip allow-listed and unflagged trusted-cloud IPs for outside services only', () => {
+  const asn = new Asn(); asn.use(asn.parse('34.64.0.0\t34.127.255.255\t396982\tUS\tGOOGLE-CLOUD-PLATFORM\n')); intel.asn = asn;
+  const ext = { id: 'abuseipdb' }, local = { id: 'misp' };
+  assert.strictEqual(intel.skipExternal(ext, { value: '34.107.243.93', type: 'ip', priority: 1 }), true);
+  assert.match(store.get("SELECT summary FROM enrichments WHERE value = '34.107.243.93' AND provider = 'abuseipdb'").summary, /Google address/);
+  assert.strictEqual(intel.skipExternal(ext, { value: '34.107.243.93', type: 'ip', priority: 3 }), false);
+  assert.strictEqual(intel.skipExternal(local, { value: '34.107.243.93', type: 'ip', priority: 1 }), false);
+  assert.strictEqual(intel.skipExternal(ext, { value: '5.9.9.9', type: 'ip', priority: 1 }), false);
+  intel.allowAdd('example.org');
+  assert.strictEqual(intel.skipExternal(ext, { value: 'www.example.org', type: 'domain', priority: 1 }), true);
+});

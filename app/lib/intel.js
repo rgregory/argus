@@ -315,10 +315,11 @@ class Intel {
       if (left <= 0) return;
       const n = Math.min(left, Math.max(1, Math.floor(cfg.osint.autoEvery / p.gap)), 10);
       const types = p.types.map(t => `'${t}'`).join(',');
-      const rows = this.store.all(`SELECT o.value, o.type FROM observables o
+      const rows = this.store.all(`SELECT o.value, o.type, o.priority FROM observables o
         LEFT JOIN enrichments e ON e.value = o.value AND e.type = o.type AND e.provider = ?
-        WHERE o.type IN (${types}) AND o.priority >= ? AND (e.fetched_at IS NULL OR e.fetched_at < ?)
-        ORDER BY o.priority DESC, o.last_seen DESC LIMIT ?`, p.id, p.minPriority, Date.now() - p.ttl, n);
+        WHERE o.type IN (${types}) AND o.priority >= ? AND (e.fetched_at IS NULL OR e.fetched_at < ? OR (e.verdict = 'skipped' AND o.priority >= 3))
+        ORDER BY o.priority DESC, o.last_seen DESC LIMIT ?`, p.id, p.minPriority, Date.now() - p.ttl, n * 6)
+        .filter(r => !this.skipExternal(p, r)).slice(0, n);
       if (!rows.length) return;
       this.busy.add(p.id);
       try {
@@ -329,6 +330,26 @@ class Intel {
       }
       finally { this.busy.delete(p.id); }
     }));
+  }
+
+  // Daily quotas on outside services are scarce. Automatic lookups skip indicators on the
+  // allow list, and IPs owned by a trusted cloud (ARGUS_TRUSTED_CLOUDS) that nothing has
+  // flagged yet (priority < 3). The skip is recorded like a result, so it isn't retried
+  // until the provider's TTL passes; manual lookups and local services (MISP, DNS) are never skipped.
+  skipExternal(p, r) {
+    if (['misp', 'dns', 'intelowl'].includes(p.id)) return false;
+    let why = '';
+    const allowed = this.allowedBy(r.value, r.type);
+    if (allowed) why = `on your allow list (${allowed})`;
+    else if (r.type === 'ip' && (r.priority || 0) < 3) {
+      const o = { value: r.value, type: 'ip', reasons: [] };
+      const owner = this.cloudOwner(o);
+      if (owner) why = `${owner} address, not flagged`;
+    }
+    if (!why) return false;
+    this.store.run(`INSERT INTO enrichments(value, type, provider, fetched_at, verdict, score, summary, link, data, error) VALUES (?, ?, ?, ?, 'skipped', 0, ?, '', NULL, NULL)
+      ON CONFLICT(value, type, provider) DO UPDATE SET fetched_at = excluded.fetched_at, verdict = 'skipped', score = 0, summary = excluded.summary, error = NULL`, r.value, r.type, p.id, Date.now(), `skipped to save quota: ${why}`);
+    return true;
   }
 
   async lookup(raw) {
@@ -489,7 +510,7 @@ class Intel {
         if (r && r.error) err = { msg: r.error, at: r.fetched_at };
       }
       return { id: p.id, name: p.name, types: p.types, enabled: p.enabled(), auto: !p.manualOnly && p.minPriority < 99,
-        minPriority: p.minPriority, callsToday: this.usage(p), daily: p.daily, error: err ? err.msg : '', errorAt: err ? err.at : null };
+        minPriority: p.minPriority, callsToday: this.usage(p), daily: p.daily, capped: this.usage(p) >= p.daily, error: err ? err.msg : '', errorAt: err ? err.at : null };
     });
   }
 
