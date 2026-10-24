@@ -138,7 +138,7 @@ function dossier(hs, report, p) {
 
   const firstSeen = execs.length ? Math.min(...execs.map(e => e.first_seen)) : null;
   return {
-    path: p, bundle, name: (app && app.name) || (bundle ? path.basename(bundle, '.app') : nameOf(p)), ident, team, signer: cls, signerId: sig.id || '',
+    path: p, bundle, name: (app && app.name) || (bundle ? path.basename(bundle, '.app') : nameOf(p)), ident, team, signer: cls, signerId: sig.id || '', signerOrg: sig.org || '', gatekeeper: sig.gk || '', sigValid: sig.valid ?? null,
     firstSeen, lastSeen: execs.length ? Math.max(...execs.map(e => e.last_seen)) : null, launches: execs.reduce((a, e) => a + e.count, 0),
     esSince: hs.store.kvGet('es.since', null),
     binaries: execs.map(e => ({ path: e.path, count: e.count, first: e.first_seen, last: e.last_seen, args: e.last_args, user: e.last_user, team: e.team, platform: !!e.platform, adhoc: !!e.adhoc })),

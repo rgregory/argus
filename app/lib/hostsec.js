@@ -99,14 +99,14 @@ class HostSec {
   signer(p) {
     const tsv = this.read('snapshots/signatures.tsv', txt => {
       const m = new Map();
-      for (const l of txt.split('\n')) { const [path, , cls, team, id] = l.split('\t'); if (path && cls) m.set(path, { cls, team: team || '', id: id || '' }); }
+      for (const l of txt.split('\n')) { const [path, , cls, team, id, org, gk, valid] = l.split('\t'); if (path && cls) m.set(path, { cls, team: team || '', id: id || '', org: org || '', gk: gk || '', valid: valid === '0' ? false : valid === '1' ? true : null }); }
       return m;
     });
     const s = tsv && tsv.get(p);
     if (s) return s;
     const e = this.store.get('SELECT team, platform, adhoc FROM es_exec WHERE path = ? LIMIT 1', p);
-    if (!e) return { cls: '', team: '', id: '' };
-    return { cls: e.platform ? 'apple' : e.adhoc ? 'adhoc' : e.team ? 'devid' : 'unsigned', team: e.team || '', id: '' };
+    if (!e) return { cls: '', team: '', id: '', org: '', gk: '', valid: null };
+    return { cls: e.platform ? 'apple' : e.adhoc ? 'adhoc' : e.team ? 'devid' : 'unsigned', team: e.team || '', id: '', org: '', gk: '', valid: null };
   }
 
   // ------------------------------------------------------------- ES ingest

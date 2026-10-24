@@ -1279,6 +1279,9 @@
               <h2 class="dos-h">Who made it?</h2>
               <dl class="dos-dl">
                 <dt>Signature</dt><dd x-text="signerLabel(dos.signer)"></dd>
+                <template x-if="dos.signerOrg"><div style="display:contents"><dt>Signed by</dt><dd x-text="dos.signerOrg"></dd></div></template>
+                <template x-if="dos.gatekeeper"><div style="display:contents"><dt>Gatekeeper</dt><dd x-text="dos.gatekeeper"></dd></div></template>
+                <template x-if="dos.sigValid === false"><div style="display:contents"><dt>Integrity</dt><dd style="color:var(--high, #b3261e)">Signature does not verify: binary changed after signing</dd></div></template>
                 <dt x-show="dos.team">Team ID</dt><dd class="mono" x-show="dos.team" x-text="dos.team"></dd>
                 <dt x-show="dos.ident">Identifier</dt><dd class="mono" x-show="dos.ident" x-text="dos.ident"></dd>
                 <template x-if="dos.app"><dt>Version</dt></template><template x-if="dos.app"><dd x-text="dos.app.version || '—'"></dd></template>
@@ -1858,9 +1861,10 @@ function argus() {
       return src.map(p => {
         const s = sig.get(p.path) || {};
         const sg = p.signer || s.signer || '';
-        const CLS = { apple: 'Apple', appstore: 'App Store', devid: 'Developer ID', adhoc: 'Unsigned / ad-hoc', unsigned: 'Unsigned / ad-hoc', other: 'Other signature' };
-        const cls = CLS[sg] || (s.platform || /^\/(System|usr\/(s?bin|libexec))\//.test(p.path) ? 'Apple' : s.team ? 'Developer ID' : s.known ? 'Unsigned / ad-hoc' : 'Signer unknown');
-        return { ...p, name: (p.path.match(/([^/]+)\.app\//) || [])[1] || p.path.split('/').pop(), cls, flagged: flagged.has(p.path) || (s.flagged > 0) };
+        const CLS = { apple: 'Apple', appstore: 'App Store', devid: 'Developer ID', dist: 'App Store', testflight: 'Developer build', dev: 'Developer build', adhoc: 'Unsigned / ad-hoc', unsigned: 'Unsigned / ad-hoc', error: 'Signer unknown', other: 'Other signature' };
+        const valid = p.valid ?? s.valid, gk = p.gk || s.gk || '', org = p.org || s.org || '';
+        const cls = valid === false ? 'Broken signature' : CLS[sg] || (s.platform || /^\/(System|usr\/(s?bin|libexec))\//.test(p.path) ? 'Apple' : s.team ? 'Developer ID' : s.known ? 'Unsigned / ad-hoc' : 'Signer unknown');
+        return { ...p, name: (p.path.match(/([^/]+)\.app\//) || [])[1] || p.path.split('/').pop(), cls, org, gk, valid, notarized: /Notarized/.test(gk), flagged: flagged.has(p.path) || (s.flagged > 0) };
       });
     },
     talkersSub() {
@@ -1869,8 +1873,8 @@ function argus() {
     },
     talkersSvg() {
       const t = this.talkers(); if (!t.length) return '';
-      const cols = ['Apple', 'App Store', 'Developer ID', 'Other signature', 'Unsigned / ad-hoc', 'Signer unknown'].filter(c => t.some(x => x.cls === c));
-      const colColor = { 'Apple': 'var(--muted)', 'App Store': this.areaColor('Certificates'), 'Other signature': this.areaColor('Devices'), 'Developer ID': this.areaColor('Permissions'), 'Unsigned / ad-hoc': this.areaColor('Network'), 'Signer unknown': this.areaColor('Posture') };
+      const cols = ['Apple', 'App Store', 'Developer ID', 'Developer build', 'Other signature', 'Broken signature', 'Unsigned / ad-hoc', 'Signer unknown'].filter(c => t.some(x => x.cls === c));
+      const colColor = { 'Apple': 'var(--muted)', 'App Store': this.areaColor('Certificates'), 'Other signature': this.areaColor('Devices'), 'Developer ID': this.areaColor('Permissions'), 'Unsigned / ad-hoc': this.areaColor('Network'), 'Signer unknown': this.areaColor('Posture'), 'Developer build': this.areaColor('Devices'), 'Broken signature': this.sevColor('high') };
       const W = 1100, H = 420, top = 34, bot = 380, left = 46, cw = (W - left) / cols.length;
       const val = x => Math.log10(1 + (x.bytes || x.conns || 0));
       const max = Math.max(1, ...t.map(val));
@@ -1889,7 +1893,7 @@ function argus() {
         });
         const hitsDot = b => placed.some(q => q.x + q.r > b[0] && q.x - q.r < b[2] && q.y + q.r > b[1] && q.y - q.r < b[3]);
         placed.forEach(({ x: xx, y: yy, r, p }, j) => {
-          out.push(`<circle data-dossier="${this.esc(p.path)}" cx="${xx}" cy="${yy}" r="${r}" fill="${colColor[c]}" opacity="${p.flagged ? 1 : .72}" ${p.flagged ? `stroke="${this.sevColor('high')}" stroke-width="3"` : ''}><title>${this.esc(p.path)}\n${p.bytes ? this.esc(this.bytes(p.bytes)) + ' · ' : ''}${p.remotes || 0} remote addresses${p.hosts.length ? '\n' + this.esc(p.hosts.slice(0, 4).join(', ')) : ''}</title></circle>`);
+          out.push(`<circle data-dossier="${this.esc(p.path)}" cx="${xx}" cy="${yy}" r="${r}" fill="${c === 'Developer ID' && p.gk && !p.notarized && !p.flagged ? 'none' : colColor[c]}" ${c === 'Developer ID' && p.gk && !p.notarized && !p.flagged ? `stroke="${colColor[c]}" stroke-width="2"` : ''} opacity="${p.flagged ? 1 : .72}" ${p.flagged ? `stroke="${this.sevColor('high')}" stroke-width="3"` : ''}><title>${this.esc(p.path)}${p.org ? '\nSigned by ' + this.esc(p.org) : ''}${p.gk ? '\nGatekeeper: ' + this.esc(p.gk) : ''}\n${p.bytes ? this.esc(this.bytes(p.bytes)) + ' · ' : ''}${p.remotes || 0} remote addresses${p.hosts.length ? '\n' + this.esc(p.hosts.slice(0, 4).join(', ')) : ''}</title></circle>`);
           if (j < 6 || p.flagged) {
             const label = p.name.length > 24 ? p.name.slice(0, 23) + '…' : p.name, lw = label.length * 6.2 + 4;
             const tries = [[xx + r + 4, 'start'], [xx - r - 4, 'end']];
@@ -1944,7 +1948,7 @@ function argus() {
       try { this.findRes = await (await fetch('/api/programs?q=' + encodeURIComponent(q.trim()))).json(); } catch (e) { this.findRes = []; }
       this.findBusy = false;
     },
-    signerLabel(c) { return ({ apple: 'Apple', appstore: 'App Store', devid: 'Developer ID', adhoc: 'Ad-hoc signed', unsigned: 'Unsigned', other: 'Other signature' })[c] || 'Signer unknown'; },
+    signerLabel(c) { return ({ apple: 'Apple', appstore: 'App Store', dist: 'App Store (distribution cert)', devid: 'Developer ID', dev: 'Developer build (Apple Development cert)', testflight: 'TestFlight build', adhoc: 'Ad-hoc signed', unsigned: 'Unsigned', error: 'Signature unreadable', other: 'Other signature' })[c] || 'Signer unknown'; },
     dosStats() {
       const d = this.dos; if (!d) return [];
       const t = d.network.totals || {}, rx = this.bytes(t.bytes_in || 0).split(' '), tx = this.bytes(t.bytes_out || 0).split(' ');

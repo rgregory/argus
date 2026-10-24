@@ -117,7 +117,7 @@ function analyzeLs(hs, add) {
   const totals = hs.store.get("SELECT SUM(connects) AS c, SUM(denies) AS d, SUM(bytes_in) AS bi, SUM(bytes_out) AS bo, COUNT(DISTINCT path) AS progs FROM ls_flows WHERE last_seen > ?", since);
   const top = hs.store.all(`SELECT path, MAX(parent) AS parent, COUNT(DISTINCT ip) AS remotes, SUM(connects) AS connects, SUM(denies) AS denies, SUM(bytes_in) AS bytes_in, SUM(bytes_out) AS bytes_out, MAX(last_seen) AS last,
     GROUP_CONCAT(DISTINCT NULLIF(host, '')) AS hosts FROM ls_flows WHERE last_seen > ? GROUP BY path ORDER BY bytes_out + bytes_in DESC LIMIT 300`, since)
-    .map(r => ({ ...r, hosts: String(r.hosts || '').split(',').filter(Boolean).slice(0, 6), signer: hs.signer(r.path).cls, team: hs.signer(r.path).team }));
+    .map(r => ({ ...r, hosts: String(r.hosts || '').split(',').filter(Boolean).slice(0, 6), ...(s => ({ signer: s.cls, team: s.team, org: s.org, gk: s.gk, valid: s.valid }))(hs.signer(r.path)) }));
   return { available: true, lastAt: hs.lsLast || n.last, totals, programs: top, denied: denied.slice(0, 200), inbound: inbound.slice(0, 200) };
 }
 
@@ -173,7 +173,7 @@ function analyzeNet(hs, add) {
     const e = hs.store.get('SELECT team, platform, adhoc, MIN(first_seen) AS first_seen FROM es_exec WHERE path = ?', path) || {};
     const s = hs.signer(path);
     if (!s.cls) return e;
-    return { team: s.team || e.team || '', platform: s.cls === 'apple' ? 1 : 0, adhoc: s.cls === 'adhoc' ? 1 : 0, first_seen: e.first_seen ?? 0, cls: s.cls };
+    return { team: s.team || e.team || '', platform: s.cls === 'apple' ? 1 : 0, adhoc: s.cls === 'adhoc' ? 1 : 0, first_seen: e.first_seen ?? 0, cls: s.cls, org: s.org, gk: s.gk, valid: s.valid };
   };
   // flagged after the allow list, the cloud tone-down and the two-source rule
   const flagged = ip => {
@@ -184,7 +184,7 @@ function analyzeNet(hs, add) {
   const byProg = new Map();
   for (const r of rows) {
     let p = byProg.get(r.path);
-    if (!p) { const s = sig(r.path); p = { path: r.path, remotes: new Set(), ports: new Set(), last: 0, first: r.first_seen, signer: s.cls || '', team: s.team || '', platform: !!s.platform, adhoc: !!s.adhoc, known: s.first_seen !== null && s.first_seen !== undefined, binFirst: s.first_seen || null, flagged: [] }; byProg.set(r.path, p); }
+    if (!p) { const s = sig(r.path); p = { path: r.path, remotes: new Set(), ports: new Set(), last: 0, first: r.first_seen, signer: s.cls || '', team: s.team || '', org: s.org || '', gk: s.gk || '', valid: s.valid ?? null, platform: !!s.platform, adhoc: !!s.adhoc, known: s.first_seen !== null && s.first_seen !== undefined, binFirst: s.first_seen || null, flagged: [] }; byProg.set(r.path, p); }
     p.remotes.add(r.remote); p.ports.add(r.port); p.last = Math.max(p.last, r.last_seen); p.first = Math.min(p.first, r.first_seen);
     const f = flagged(r.remote);
     if (f && !p.flagged.some(x => x.ip === r.remote)) p.flagged.push({ ip: r.remote, port: r.port, risk: f.risk, why: (JSON.parse(f.reasons || '[]')[0] || '') });
@@ -206,7 +206,7 @@ function analyzeNet(hs, add) {
   if (fresh.length) add({ sev: 'low', area: 'Network', title: `${plural(fresh.length, 'newly seen program')} talking to the internet`, source: 'lsof + Endpoint Security',
     detail: 'Third-party programs first seen in the last 7 days that opened outbound connections.', evidence: fresh.map(p => `${fmt(p.binFirst)} first run · ${line(p)}`) });
   return { available: true, programs: progs.sort((a, b) => b.remotes.size - a.remotes.size).slice(0, 300)
-    .map(p => ({ path: p.path, remotes: p.remotes.size, sample: [...p.remotes].slice(0, 5), ports: [...p.ports].slice(0, 10), last: p.last, signer: p.signer, team: p.team, platform: p.platform, adhoc: p.adhoc, known: p.known, flagged: p.flagged.length })) };
+    .map(p => ({ path: p.path, remotes: p.remotes.size, sample: [...p.remotes].slice(0, 5), ports: [...p.ports].slice(0, 10), last: p.last, signer: p.signer, team: p.team, org: p.org, gk: p.gk, valid: p.valid, platform: p.platform, adhoc: p.adhoc, known: p.known, flagged: p.flagged.length })) };
 }
 
 // ------------------------------------------------------------ file integrity

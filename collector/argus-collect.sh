@@ -193,28 +193,49 @@ network_state() {
 devices() { system_profiler -json -detailLevel mini SPUSBHostDataType SPUSBDataType SPBluetoothDataType 2>/dev/null; }
 
 # Code signature of every running executable (hourly). Cached by path and
-# mtime, so codesign only runs for new or changed binaries.
-# Columns: path, mtime, class (apple|appstore|devid|adhoc|unsigned|other), team, identifier
+# mtime, so codesign only runs for new or changed binaries; failed lookups are
+# retried every run instead of being cached.
+# Columns: path, mtime, class, team, identifier, org, gatekeeper, valid
+#   class: apple|appstore|devid|dev|testflight|dist|adhoc|unsigned|other|error
+#   org:   signer name from the leaf Authority ("Google LLC")
+#   gatekeeper: spctl source ("Notarized Developer ID", "rejected", ...) for third-party code
+#   valid: 1 if codesign --verify --strict passes, 0 if the signature is broken
 signatures() {
-  local C="$INBOX/.state/signatures.tsv" N="$INBOX/.state/signatures.new" p m line out cls team ident
+  local C="$INBOX/.state/signatures.v2.tsv" N="$INBOX/.state/signatures.new" p m line out rc cls team ident auth org gk valid target
   touch "$C"
   ps -axo comm= 2>/dev/null | grep '^/' | sort -u | while IFS= read -r p; do
     [ -f "$p" ] || continue
     m=$(stat -f %m "$p" 2>/dev/null) || continue
-    line=$(awk -F'\t' -v p="$p" -v m="$m" '$1 == p && $2 == m { print; exit }' "$C")
+    line=$(awk -F'\t' -v p="$p" -v m="$m" '$1 == p && $2 == m && $3 != "error" { print; exit }' "$C")
     if [ -z "$line" ]; then
-      out=$(codesign -dvv "$p" 2>&1)
+      out=$(codesign -dvv "$p" 2>&1); rc=$?
+      auth=$(printf '%s\n' "$out" | sed -n 's/^Authority=//p' | head -n 1)
       case "$out" in
         *"not signed at all"*) cls=unsigned ;;
         *"Signature=adhoc"*) cls=adhoc ;;
-        *"Authority=Software Signing"*) cls=apple ;;
-        *"Authority=Apple Mac OS Application Signing"*) cls=appstore ;;
-        *"Authority=Developer ID Application"*) cls=devid ;;
-        *) cls=other ;;
+        *) case "$auth" in
+             "Software Signing") cls=apple ;;
+             "Apple Mac OS Application Signing") cls=appstore ;;
+             "Developer ID Application:"*) cls=devid ;;
+             "Apple Development:"*|"Mac Developer:"*) cls=dev ;;
+             "TestFlight"*) cls=testflight ;;
+             "Apple Distribution:"*|"3rd Party Mac Developer Application:"*) cls=dist ;;
+             "") [ "$rc" -ne 0 ] && cls=error || cls=other ;;
+             *) cls=other ;;
+           esac ;;
       esac
       team=$(printf '%s\n' "$out" | sed -n 's/^TeamIdentifier=//p' | head -n 1); [ "$team" = "not set" ] && team=
       ident=$(printf '%s\n' "$out" | sed -n 's/^Identifier=//p' | head -n 1)
-      line=$(printf '%s\t%s\t%s\t%s\t%s' "$p" "$m" "$cls" "$team" "$ident")
+      org=$(printf '%s' "$auth" | sed -E 's/^[^:]*: //; s/ \([A-Z0-9]{10}\)$//'); [ "$org" = "$auth" ] && [ "$cls" != other ] && org=
+      [ "$cls" = apple ] && org=Apple
+      valid=1; case "$cls" in unsigned|error) valid= ;; *) codesign --verify --strict "$p" >/dev/null 2>&1 || valid=0 ;; esac
+      gk=
+      case "$cls" in apple|unsigned|error) ;; *)
+        target=$(printf '%s' "$p" | sed -n 's#^\(.*\.app\)/Contents/.*#\1#p'); [ -n "$target" ] || target=$p
+        gk=$(spctl --assess --type execute -vv "$target" 2>&1 | sed -n 's/^source=//p' | head -n 1)
+        [ -n "$gk" ] || gk=$(spctl --assess --type execute "$target" >/dev/null 2>&1 && echo accepted || echo rejected) ;;
+      esac
+      line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$p" "$m" "$cls" "$team" "$ident" "$org" "$gk" "$valid")
     fi
     printf '%s\n' "$line"
   done > "$N"
