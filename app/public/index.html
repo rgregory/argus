@@ -180,6 +180,8 @@
   .ed-plink { color: inherit; text-decoration: underline dotted; text-decoration-color: var(--muted); text-underline-offset: 3px; }
   .ed-plink:hover { text-decoration-color: currentColor; color: inherit; }
   .ed-chart [data-dossier] { cursor: pointer; }
+  .ed-chart-tip { position: relative; }
+  .ed-tip { display: none; position: absolute; z-index: 5; pointer-events: none; max-width: 26rem; white-space: pre-line; overflow-wrap: anywhere; background: var(--paper-2); color: var(--ink); border: 1px solid var(--rule); box-shadow: 0 2px 8px rgba(0,0,0,.12); padding: .45rem .6rem; font: .8rem/1.4 'Source Serif 4', Georgia, serif; }
 
   /* ---- dossier */
   .dos-wrap { position: fixed; inset: 0; z-index: 1040; overflow-y: auto; padding: 2.5rem 1rem 4rem; }
@@ -388,7 +390,7 @@
           <section class="ed-sec" x-show="talkers().length">
             <h2 class="ed-h">Who is the Mac talking to?</h2>
             <p class="ed-sub" x-html="talkersSub()"></p>
-            <div class="ed-chart" x-html="talkersSvg()" @click="dosClick($event)"></div>
+            <div class="ed-chart ed-chart-tip" @mousemove="chartTip($event)" @mouseleave="chartTip(null)" @click="dosClick($event)"><div x-html="talkersSvg()"></div><div class="ed-tip" x-ref="tip"></div></div>
           </section>
 
           <!-- portraits -->
@@ -1868,8 +1870,8 @@ function argus() {
       });
     },
     talkersSub() {
-      const t = this.talkers(), odd = t.filter(x => x.cls === 'Unsigned / ad-hoc').length, fl = t.filter(x => x.flagged).length;
-      return `<b>${t.length}</b> programs with traffic in 24 h, by signer; height is ${t.some(x => x.bytes) ? 'bytes' : 'connections'} (log). Unsigned: <b style="color:${odd ? this.sevColor('medium') : 'inherit'}">${odd}</b>.${fl ? ` Ringed: <b style="color:${this.sevColor('high')}">${fl}</b> contacted flagged destinations.` : ''} Click a dot for its dossier.`;
+      const t = this.talkers(), odd = t.filter(x => x.cls === 'Unsigned / ad-hoc').length, fl = t.filter(x => x.flagged).length, unk = t.filter(x => x.cls === 'Signer unknown').length;
+      return `<b>${t.length}</b> programs with traffic in 24 h, by signer; height is ${t.some(x => x.bytes) ? 'bytes' : 'connections'} (log). Unsigned: <b style="color:${odd ? this.sevColor('medium') : 'inherit'}">${odd}</b>${unk ? ` · signature unreadable: <b>${unk}</b>` : ''}.${fl ? ` Ringed: <b style="color:${this.sevColor('high')}">${fl}</b> contacted flagged destinations.` : ''} Click a dot for its dossier.`;
     },
     talkersSvg() {
       const t = this.talkers(); if (!t.length) return '';
@@ -1886,26 +1888,47 @@ function argus() {
         out.push(`<text x="${x0 + cw / 2}" y="${top - 16}" text-anchor="middle" style="font:600 14px Fraunces,Georgia,serif;font-variant:small-caps;letter-spacing:.04em;fill:${colColor[c]}">${this.esc(c)} · ${items.length}</text>`);
         const placed = [], labels = [];
         items.forEach(p => {
-          const yy = y(val(p)); let xx = x0 + cw / 2, k = 0;
-          const r = 4 + Math.min(6, Math.sqrt(p.remotes || 1));
-          while (placed.some(q => Math.hypot(q.x - xx, q.y - yy) < q.r + r + 3) && k < 60) { k++; xx = x0 + cw / 2 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 11; }
+          const y0 = y(val(p)), r = 4 + Math.min(6, Math.sqrt(p.remotes || 1)), half = cw / 2 - r - 6;
+          const free = (cx, cy) => !placed.some(q => Math.hypot(q.x - cx, q.y - cy) < q.r + r + 3);
+          let best = null;
+          for (let dy = 0; dy <= 60 && !best; dy += 6) for (const sy of dy ? [1, -1] : [1]) {
+            const cy = Math.min(bot, Math.max(top, y0 + sy * dy));
+            for (let k = 0; k * 5.5 <= half; k++) { const cx = x0 + cw / 2 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 11; if (Math.abs(cx - x0 - cw / 2) <= half && free(cx, cy)) { best = [cx, cy]; break; } }
+            if (best) break;
+          }
+          const [xx, yy] = best || [x0 + cw / 2, y0];
           placed.push({ x: xx, y: yy, r, p });
         });
         const hitsDot = b => placed.some(q => q.x + q.r > b[0] && q.x - q.r < b[2] && q.y + q.r > b[1] && q.y - q.r < b[3]);
         placed.forEach(({ x: xx, y: yy, r, p }, j) => {
-          out.push(`<circle data-dossier="${this.esc(p.path)}" cx="${xx}" cy="${yy}" r="${r}" fill="${c === 'Developer ID' && p.gk && !p.notarized && !p.flagged ? 'none' : colColor[c]}" ${c === 'Developer ID' && p.gk && !p.notarized && !p.flagged ? `stroke="${colColor[c]}" stroke-width="2"` : ''} opacity="${p.flagged ? 1 : .72}" ${p.flagged ? `stroke="${this.sevColor('high')}" stroke-width="3"` : ''}><title>${this.esc(p.path)}${p.org ? '\nSigned by ' + this.esc(p.org) : ''}${p.gk ? '\nGatekeeper: ' + this.esc(p.gk) : ''}\n${p.bytes ? this.esc(this.bytes(p.bytes)) + ' · ' : ''}${p.remotes || 0} remote addresses${p.hosts.length ? '\n' + this.esc(p.hosts.slice(0, 4).join(', ')) : ''}</title></circle>`);
-          if (j < 6 || p.flagged) {
-            const label = p.name.length > 24 ? p.name.slice(0, 23) + '…' : p.name, lw = label.length * 6.2 + 4;
-            const tries = [[xx + r + 4, 'start'], [xx - r - 4, 'end']];
-            for (const [lx, anchor] of tries) {
-              const x1 = anchor === 'start' ? lx : lx - lw, box = [x1, yy - 8, x1 + lw, yy + 6];
-              if (x1 < x0 + 2 || x1 + lw > x0 + cw - 2) continue;
-              if (labels.some(b => !(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3])) || hitsDot(box)) continue;
-              labels.push(box);
-              out.push(`<text class="lbl" data-dossier="${this.esc(p.path)}" x="${lx}" y="${yy + 4}" text-anchor="${anchor}"${p.flagged ? ` style="fill:${this.sevColor('high')};font-weight:700"` : ''}>${this.esc(label)}</text>`);
-              break;
-            }
+          out.push(`<circle data-dossier="${this.esc(p.path)}" cx="${xx}" cy="${yy}" r="${r}" fill="${c === 'Developer ID' && p.gk && !p.notarized && !p.flagged ? 'none' : colColor[c]}" ${c === 'Developer ID' && p.gk && !p.notarized && !p.flagged ? `stroke="${colColor[c]}" stroke-width="2"` : ''} opacity="${p.flagged ? 1 : .72}" ${p.flagged ? `stroke="${this.sevColor('high')}" stroke-width="3"` : ''} data-tip="${this.esc([p.path, p.org && 'Signed by ' + p.org, p.gk && 'Gatekeeper: ' + p.gk, (p.bytes ? this.bytes(p.bytes) + ' · ' : '') + (p.remotes || 0) + ' remote addresses', p.flagged && 'Contacted a flagged destination', p.hosts.length && p.hosts.slice(0, 4).join(', ')].filter(Boolean).join('\n'))}"></circle>`);
+        });
+        const order = placed.map((q, j) => ({ ...q, j })).filter(q => q.p.flagged || q.j < 6).sort((a, b) => b.p.flagged - a.p.flagged || a.j - b.j);
+        const clash = box => labels.some(b => !(box[2] < b[0] || box[0] > b[2] || box[3] < b[1] || box[1] > b[3]));
+        order.forEach(({ x: xx, y: yy, r, p }) => {
+          const fl = p.flagged, label = p.name.length > 24 ? p.name.slice(0, 23) + '…' : p.name, lw = label.length * (fl ? 6.9 : 6.2) + 4;
+          const tries = [];
+          for (const dy of [0, -16, 16, -30, 30, -44, 44, -58, 58]) for (const side of [1, -1]) tries.push([xx + side * (r + 4 + (dy ? 10 : 0)), yy + dy, side > 0 ? 'start' : 'end']);
+          const fit = (lx, ly, anchor, strict) => {
+            let x1 = anchor === 'start' ? lx : lx - lw;
+            if (!strict) x1 = Math.max(x0 + 2, Math.min(x0 + cw - 2 - lw, x1));
+            const box = [x1, ly - 8, x1 + lw, ly + 6];
+            if (x1 < x0 + 2 || x1 + lw > x0 + cw - 2 || box[1] < top - 4 || box[3] > H - 2) return null;
+            if (strict && (clash(box) || hitsDot(box))) return null;
+            return box;
+          };
+          let hit = null;
+          for (const [lx, ly, anchor] of tries) { const b = fit(lx, ly, anchor, true); if (b) { hit = [b, ly]; break; } }
+          if (!hit && fl) {
+            const dotHits = box => placed.filter(q => q.x + q.r > box[0] && q.x - q.r < box[2] && q.y + q.r > box[1] && q.y - q.r < box[3]).length;
+            let bestN = 1e9;
+            for (const [lx, ly, anchor] of tries) { const b = fit(lx, ly, anchor, false); if (b && !clash(b)) { const n = dotHits(b) * 100 + Math.abs(ly - yy); if (n < bestN) { bestN = n; hit = [b, ly]; } } }
           }
+          if (!hit) return;
+          const [box, ly] = hit;
+          labels.push(box);
+          if (Math.abs(ly - yy) > 1) { const ex = box[0] > xx ? box[0] - 2 : box[2] + 2; out.push(`<line x1="${xx}" y1="${yy}" x2="${ex}" y2="${ly - 3}" stroke="${fl ? this.sevColor('high') : 'var(--muted)'}" stroke-width=".8" opacity=".7"/>`); }
+          out.push(`<text class="lbl" data-dossier="${this.esc(p.path)}" x="${box[0]}" y="${ly + 4}"${fl ? ` style="fill:${this.sevColor('high')};font-weight:700"` : ''} data-tip="${this.esc(p.path)}">${this.esc(label)}</text>`);
         });
       });
       const ticks = [1e3, 1e6, 1e9].filter(b => Math.log10(1 + b) <= max);
@@ -1935,6 +1958,16 @@ function argus() {
       this.dosBusy = false;
     },
     closeDossier() { this.dos = null; this.dosBusy = false; this.dosErr = ''; document.body.classList.remove('dos-open'); },
+    chartTip(ev) {
+      const tip = this.$refs.tip; if (!tip) return;
+      const el = ev && ev.target.closest('[data-tip]');
+      if (!el) { tip.style.display = 'none'; return; }
+      const box = ev.currentTarget.getBoundingClientRect();
+      tip.textContent = el.getAttribute('data-tip'); tip.style.display = 'block';
+      const x = ev.clientX - box.left, y = ev.clientY - box.top, w = tip.offsetWidth, h = tip.offsetHeight;
+      tip.style.left = (x + 14 + w > box.width ? Math.max(0, x - 14 - w) : x + 14) + 'px';
+      tip.style.top = (y + 14 + h > box.height ? Math.max(0, y - 14 - h) : y + 14) + 'px';
+    },
     dosClick(ev) {
       const a = ev.target.closest('[data-dossier]');
       if (!a) return;

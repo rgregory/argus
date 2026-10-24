@@ -54,6 +54,10 @@ DAEMON_PLIST="/Library/LaunchDaemons/$DAEMON_LABEL.plist"
 AGENT_PLIST="$HOME/Library/LaunchAgents/$AGENT_LABEL.plist"
 STREAM_LABEL="com.argus.logstream"
 STREAM_PLIST="/Library/LaunchDaemons/$STREAM_LABEL.plist"
+ES_LABEL="com.argus.eslogger"
+ES_PLIST="/Library/LaunchDaemons/$ES_LABEL.plist"
+TCC_LABEL="com.argus.tcc"
+TCC_PLIST="/Library/LaunchDaemons/$TCC_LABEL.plist"
 SYSLOG_CONF="/etc/syslog.conf"
 SYSLOG_MARK="# argus-forward (added by argus.sh stream on)"
 
@@ -696,9 +700,9 @@ cmd_telemetry_status() {
   local inbox SPOOL; inbox="$(env_val ARGUS_INBOX /Users/Shared/Argus/inbox)"; SPOOL="$(dirname "$inbox")/spool"
   if [ -f "$ES_PLIST" ]; then
     ok "eslogger job installed"
-    sudo -n tail -n 3 /var/log/argus-eslogger.log 2>/dev/null | sed 's/^/      /'
+    sudo -n tail -n 3 /var/log/argus-eslogger.log 2>/dev/null | sed 's/^/      /' || echo "      (eslogger log needs sudo)"
     sudo -n ls -la "$SPOOL" 2>/dev/null | sed 's/^/      /' || echo "      (spool listing needs sudo)"
-    echo "    es chunks: $(find "$inbox/es" -name '*.ndjson' 2>/dev/null | wc -l | tr -d ' ')"
+    echo "    es chunks: $(find "$inbox/es" -name '*.ndjson' 2>/dev/null | wc -l | tr -d ' ' || true)"
   else warn "eslogger job not installed"; fi
   if [ -f "$TCC_PLIST" ]; then
     ok "TCC job installed"
